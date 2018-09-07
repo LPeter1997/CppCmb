@@ -8,6 +8,10 @@ CppCmb is a single-header C++17 monadic parser-combinator library that aims for 
 
 It's a single header file that you can just drop into your project and use it straight away.
 
+# How do I use it?
+
+See the [wiki](https://github.com/LPeter1997/CppCmb/wiki) for usage.
+
 # How can I contribute?
 
 You can open issues, or do a pull-request if you've implemented/fixed something.
