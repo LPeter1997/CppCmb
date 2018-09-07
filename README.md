@@ -2,11 +2,11 @@
 
 # What is CppCmb?
 
-CppCmb is a single-header C++17 monadic parser-combinator library that aims for genericity and performance.
+CppCmb is a [single-header](https://github.com/LPeter1997/CppCmb/blob/master/cppcmb.hpp) C++17 monadic parser-combinator library that aims for genericity and performance.
 
 # How do I compile/install it?
 
-It's a single header file that you can just drop into your project and use it straight away.
+It's a [single header file](https://github.com/LPeter1997/CppCmb/blob/master/cppcmb.hpp) that you can just drop into your project and use it straight away.
 
 # How do I use it?
 
