@@ -21,3 +21,4 @@ You can open issues, or do a pull-request if you've implemented/fixed something.
 * Automatic single-element tuple unwrapping when possible
 * Create regression tests
 * Add more examples
+* Test and make it work on MSVC (currently only workd with GCC, untested on everything else)
