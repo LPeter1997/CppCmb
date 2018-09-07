@@ -329,7 +329,7 @@ namespace detail {
 
 		template <typename Init, typename Rest>
 		constexpr auto operator()(Init&& first, Rest&& rest) const {
-			for (auto it = std::begin(rest); it != std::end(rest); ++it) {
+			for (auto it = std::cbegin(rest); it != std::cend(rest); ++it) {
 				first = Folder()(first, *it);
 			}
 			return first;
@@ -346,7 +346,7 @@ namespace detail {
 
 		template <typename Init, typename Rest>
 		constexpr auto operator()(Init&& rest, Rest&& first) const {
-			for (auto it = std::rbegin(rest); it != std::rend(rest); ++it) {
+			for (auto it = std::crbegin(rest); it != std::crend(rest); ++it) {
 				first = Folder()(*it, first);
 			}
 			return first;
