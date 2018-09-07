@@ -1,3 +1,5 @@
+![alt text](https://github.com/LPeter1997/CppCmb/blob/master/cppcmb_logo.svg "CppCmb Logo")
+
 # What is CppCmb?
 
 CppCmb is a single-header C++17 monadic parser-combinator library that aims for genericity and performance.
