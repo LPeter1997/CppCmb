@@ -10,8 +10,13 @@ It's a [single header file](https://github.com/LPeter1997/CppCmb/blob/master/cpp
 
 # How do I use it?
 
-See the [wiki](https://github.com/LPeter1997/CppCmb/wiki) for usage.
+See the [wiki](https://github.com/LPeter1997/CppCmb/wiki) for documentation and tutorial. See [examples folder](https://github.com/LPeter1997/CppCmb/tree/master/examples) for usage.
 
 # How can I contribute?
 
 You can open issues, or do a pull-request if you've implemented/fixed something.
+
+# To do:
+* Create regression tests
+* Provide some helper to implement terminal matching
+* Automatic single-element tuple unwrapping when possible
