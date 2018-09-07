@@ -6,8 +6,8 @@
  * @description Generic parser combinators for C++17.
  */
 
-#ifndef __CPPCMB_HPP__
-#define __CPPCMB_HPP__
+#ifndef CPPCMB_HPP__
+#define CPPCMB_HPP__
 
 #include <functional>
 #include <iterator>
@@ -544,4 +544,4 @@ static constexpr auto operator|(Left&& l, Right&& r) {
 	);
 }
 
-#endif /* __CPPCMB_HPP__ */
+#endif /* CPPCMB_HPP__ */
