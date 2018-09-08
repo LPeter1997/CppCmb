@@ -392,6 +392,26 @@ namespace detail {
 	>;
 
 	/**
+	 * Filters the result. If the predicate is true, it succeeds, fails
+	 * otherwise.
+	 */
+	template <typename Predicate>
+	struct filter_impl {
+		constexpr filter_impl() = default;
+
+		template <typename... Ts>
+		constexpr expected<std::tuple<std::decay_t<Ts>...>>
+		operator()(Ts&&... args) const {
+			if (Predicate()(args...)) {
+				return make_expected(
+					std::make_tuple(std::forward<Ts>(args)...)
+				);
+			}
+			return std::nullopt;
+		}
+	};
+
+	/**
 	 * Selector function that returns some elements of the tuple.
 	 */
 	template <std::size_t... Indicies>
@@ -502,6 +522,9 @@ struct combinator_types {
 	template <auto Fn>
 	using fn = detail::fn_wrap<Fn>;
 
+	template <typename Predicate>
+	using filter = detail::filter_impl<Predicate>;
+
 	template <std::size_t... Indicies>
 	using select = detail::select_impl<Indicies...>;
 
@@ -563,6 +586,9 @@ struct combinator_values {
 
 	template <auto Fn>
 	static constexpr auto fn = typename types::template fn<Fn>();
+
+	template <typename Predicate>
+	static constexpr auto filter = typename types::template filter<Predicate>();
 
 	template <std::size_t... Indicies>
 	static constexpr auto select = 
