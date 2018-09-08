@@ -588,17 +588,23 @@ struct combinator_values {
 	static constexpr auto fn = typename types::template fn<Fn>();
 
 	template <typename Predicate>
-	static constexpr auto filter = typename types::template filter<Predicate>();
+	static constexpr auto filter(Predicate&&) {
+		return typename types::template filter<std::decay_t<Predicate>>();
+	}
 
 	template <std::size_t... Indicies>
 	static constexpr auto select = 
 		typename types::template select<Indicies...>();
 
 	template <typename Folder>
-	static constexpr auto foldl = typename types::template foldl<Folder>();
+	static constexpr auto foldl(Folder&&) {
+		return typename types::template foldl<std::decay_t<Folder>>();
+	}
 
 	template <typename Folder>
-	static constexpr auto foldr = typename types::template foldr<Folder>();
+	static constexpr auto foldr(Folder&&) {
+		return typename types::template foldr<std::decay_t<Folder>>();
+	}
 };
 
 /**

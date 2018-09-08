@@ -121,7 +121,7 @@ using term_t = pt::map<pt::one, pt::filter<pt::fn<match_predicate<Expected_Type>
 
 // Value-style
 template <token::type Expected_Type>
-static constexpr auto term_v = pv::one[pv::filter<pt::fn<match_predicate<Expected_Type>>>];
+static constexpr auto term_v = pv::one[pv::filter(pv::fn<match_predicate<Expected_Type>>)];
 
 expr_t* to_int_expr(token const& num) {
 	return new num_expr_t(num);
@@ -143,13 +143,13 @@ pv::result_type<expr_t*> expression(token_iterator it) {
 		| term_v<token::num>[pv::fn<to_int_expr>]
 		;
 	constexpr auto exponentiation =
-		(pv::rep<std::vector>(atomic & term_v<token::expon>) & atomic)[pv::foldr<pt::fn<to_bin_expr_r>>]
+		(pv::rep<std::vector>(atomic & term_v<token::expon>) & atomic)[pv::foldr(pv::fn<to_bin_expr_r>)]
 		;
 	constexpr auto multiplication =
-		(exponentiation & pv::rep<std::vector>((term_v<token::mul> | term_v<token::div>) & exponentiation))[pv::foldl<pt::fn<to_bin_expr_l>>]
+		(exponentiation & pv::rep<std::vector>((term_v<token::mul> | term_v<token::div>) & exponentiation))[pv::foldl(pv::fn<to_bin_expr_l>)]
 		;
 	constexpr auto addition =
-		(multiplication & pv::rep<std::vector>((term_v<token::add> | term_v<token::sub>) & multiplication))[pv::foldl<pt::fn<to_bin_expr_l>>]
+		(multiplication & pv::rep<std::vector>((term_v<token::add> | term_v<token::sub>) & multiplication))[pv::foldl(pv::fn<to_bin_expr_l>)]
 		;
 	return addition(it);
 }
