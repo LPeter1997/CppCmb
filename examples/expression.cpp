@@ -110,23 +110,20 @@ using pt = cppcmb::combinator_types<token_iterator>;
 using pv = cppcmb::combinator_values<token_iterator>;
 
 template <token::type Expected_Type>
-constexpr pv::result_type<token> match_combinator(token_iterator it) {
-	auto result = pv::one(it);
-	if (result) {
-		if (std::get<0>(result->first).ty == Expected_Type) {
-			return result;
-		}
+constexpr pv::expected<token> match_mapper(token const& tok) {
+	if (tok.ty == Expected_Type) {
+		return tok;
 	}
 	return std::nullopt;
 }
 
 // Template-style
 template <token::type Expected_Type>
-using term_t = pt::wrap<match_combinator<Expected_Type>>;
+using term_t = pt::map<pt::one, pt::fn<match_mapper<Expected_Type>>>;
 
 // Value-style
 template <token::type Expected_Type>
-static constexpr auto term_v = pv::wrap<match_combinator<Expected_Type>>;
+static constexpr auto term_v = pv::one[pv::fn<match_mapper<Expected_Type>>];
 
 expr_t* to_int_expr(token const& num) {
 	return new num_expr_t(num);

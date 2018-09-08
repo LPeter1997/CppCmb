@@ -10,6 +10,7 @@
 #define CPPCMB_HPP
 
 #include <functional>
+#include <initializer_list>
 #include <iterator>
 #include <optional>
 #include <tuple>
@@ -22,6 +23,40 @@ namespace cppcmb {
  * Here are the combinator implementations and other type trait utilities.
  */
 namespace detail {
+	/**
+	 * A custom optional wrapper to differentiate std::optional from nullables
+	 * returned by a mapping failure.
+	 */
+	template <typename T>
+	struct expected : private std::optional<T> {
+		using std::optional<T>::optional;
+		using std::optional<T>::operator=;
+		using std::optional<T>::operator->;
+		using std::optional<T>::operator*;
+		using std::optional<T>::operator bool;
+		using std::optional<T>::has_value;
+		using std::optional<T>::value;
+		using std::optional<T>::value_or;
+	};
+
+	/**
+	 * Helper function to make the failable type.
+	 */
+	template <typename T>
+	constexpr auto make_expected(T&& val) {
+		return expected<std::decay_t<T>>(std::forward<T>(val));
+	}
+
+	template <typename T, typename... Args> 
+	constexpr auto make_expected(Args&&... args) {
+		return expected<T>(std::in_place, std::forward<Args>(args)...);
+	}
+
+	template <typename T, typename U, typename... Args> 
+	constexpr auto make_expected(std::initializer_list<U> il, Args&&... args) {
+		return expected<T>(std::in_place, il, std::forward<Args>(args)...);
+	}
+
 	/**
 	 * General result type.
 	 */
@@ -279,24 +314,70 @@ namespace detail {
 	>;
 
 	/**
+	 * A wrapper for the map combinator to detect transformations that can fail.
+	 */
+	template <typename RetTy,
+		typename TokenIterator, typename Combinator, typename Mapper>
+	struct cmb_map_impl {
+		constexpr cmb_map_impl() = default;
+
+		static constexpr auto pass(TokenIterator it) {
+			auto res = Combinator()(it);
+			if (res) {
+				return make_result(
+					as_tuple(std::apply(Mapper(), res->first)),
+					res->second
+				);
+			}
+			// XXX(LPeter1997): Simplify?
+			using result_type = decltype(make_result(
+				as_tuple(std::apply(Mapper(), res->first)),
+				it
+			));
+			return result_type();
+		}
+	};
+
+	template <typename TokenIterator, typename Combinator, typename Mapper,
+		typename T>
+	struct cmb_map_impl<expected<T>, TokenIterator, Combinator, Mapper> {
+		constexpr cmb_map_impl() = default;
+
+		static constexpr auto pass(TokenIterator it) {
+			auto res = Combinator()(it);
+			// XXX(LPeter1997): Simplify?
+			using result_type = decltype(make_result(
+				as_tuple(*std::apply(Mapper(), res->first)),
+				it
+			));
+			if (res) {
+				auto transformed = std::apply(Mapper(), res->first);
+				if (transformed) {
+					return make_result(
+						as_tuple(std::move(*transformed)),
+						res->second
+					);
+				}
+			}
+			return result_type();
+		}
+	};
+
+	/**
 	 * Applies a combinator. If it succeeded, the result data is applied to a
-	 * transformation function.
+	 * transformation function. If the transformation can fail, then it's also
+	 * considered when returning (on transformation failure the combinator
+	 * fails).
 	 */
 	template <typename TokenIterator, typename Combinator, typename Mapper>
 	static constexpr auto cmb_map_fn(TokenIterator it) {
-		auto res = Combinator()(it);
-		if (res) {
-			return make_result(
-				as_tuple(std::apply(Mapper(), res->first)),
-				res->second
-			);
-		}
-		// XXX(LPeter1997): Simplify?
-		using result_type = decltype(make_result(
-			as_tuple(std::apply(Mapper(), res->first)),
-			it
+		using combinator_result = decltype(Combinator()(it));
+		using transform_result = decltype(std::apply(
+			Mapper(),
+			std::declval<combinator_result>()->first
 		));
-		return result_type();
+		return cmb_map_impl<std::decay_t<transform_result>,
+			TokenIterator, Combinator, Mapper>::pass(it);
 	}
 
 	template <typename TokenIterator, typename Combinator, typename Mapper>
@@ -383,6 +464,9 @@ namespace detail {
  */
 template <typename TokenIterator>
 struct combinator_types {
+	template <typename T>
+	using expected = detail::expected<T>;
+
 	template <typename... Data>
 	using result_type = detail::result_type<TokenIterator, Data...>;
 
@@ -425,6 +509,9 @@ struct combinator_types {
 template <typename TokenIterator>
 struct combinator_values {
 	using types = combinator_types<TokenIterator>;
+
+	template <typename T>
+	using expected = typename types::template expected<T>;
 
 	template <typename... Data>
 	using result_type = typename types::template result_type<Data...>;
