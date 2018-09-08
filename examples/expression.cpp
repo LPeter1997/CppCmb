@@ -109,7 +109,7 @@ using token_iterator = typename std::vector<token>::const_iterator;
 using pt = cppcmb::combinator_types<token_iterator>;
 using pv = cppcmb::combinator_values<token_iterator>;
 
-// A transformation that could fail
+// Token matching predicate
 template <token::type Expected_Type>
 constexpr bool match_predicate(token const& tok) {
 	return tok.ty == Expected_Type;
