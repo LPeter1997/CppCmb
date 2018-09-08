@@ -29,6 +29,12 @@ namespace detail {
 	 */
 	template <typename T>
 	struct expected : private std::optional<T> {
+		expected(std::optional<T> const&) = delete;
+		expected(std::optional<T>&&) = delete;
+
+		expected(expected const&) = default;
+		expected(expected&&) = default;
+
 		using std::optional<T>::optional;
 		using std::optional<T>::operator=;
 		using std::optional<T>::operator->;

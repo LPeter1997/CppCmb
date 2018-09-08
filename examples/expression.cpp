@@ -109,6 +109,7 @@ using token_iterator = typename std::vector<token>::const_iterator;
 using pt = cppcmb::combinator_types<token_iterator>;
 using pv = cppcmb::combinator_values<token_iterator>;
 
+// A transformation that could fail
 template <token::type Expected_Type>
 constexpr pv::expected<token> match_mapper(token const& tok) {
 	if (tok.ty == Expected_Type) {
