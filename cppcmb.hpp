@@ -240,7 +240,7 @@ namespace detail {
 	 * none of them succeeds, the combinator fails.
 	 */
 	template <typename TokenIterator, typename ResultData>
-	static constexpr auto cmb_alt_fn(TokenIterator it) {
+	static constexpr auto cmb_alt_fn(TokenIterator) {
 		// End of alternatives, fail
 		return std::optional<std::pair<ResultData, TokenIterator>>();
 	}
@@ -303,12 +303,11 @@ namespace detail {
 	template <typename TokenIterator, 
 		template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep1_fn(TokenIterator it) {
-		using element_type = typename Combinator::data_type;
-		using result_type = std::pair<std::tuple<element_type>, TokenIterator>;
 		auto res = cmb_rep_fn<TokenIterator, Collection, Combinator>(it);
+		using res_type = decltype(res);
 		if (std::get<0>(res->first).empty()) {
 			// Empty, fail
-			return std::optional<result_type>();
+			return res_type();
 		}
 		return res;
 	}
