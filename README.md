@@ -17,7 +17,6 @@ See the [wiki](https://github.com/LPeter1997/CppCmb/wiki) for documentation and 
 You can open issues, or do a pull-request if you've implemented/fixed something.
 
 # To do:
-* Provide some helper to implement terminal matching
 * Automatic single-element tuple unwrapping when possible
 * Create regression tests
 * Add more examples
