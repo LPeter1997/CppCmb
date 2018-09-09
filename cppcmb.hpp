@@ -185,8 +185,19 @@ namespace detail {
 	}
 
 	/**
-	 * The simplest combinator that returns the current token and advances the
-	 * position by one.
+	 * The simplest combinator that succeeds with an empty result.
+	 */
+	template <typename TokenIterator>
+	static constexpr auto cmb_succ_fn(TokenIterator it) {
+		return make_result(std::make_tuple(), it);
+	}
+
+	template <typename TokenIterator>
+	using cmb_succ = fn_wrap<cmb_succ_fn<TokenIterator>, TokenIterator>;
+
+	/**
+	 * A combinator that returns the current token and advances the position by
+	 * one.
 	 */
 	template <typename TokenIterator>
 	static constexpr auto cmb_one_fn(TokenIterator it) {
@@ -531,6 +542,8 @@ struct combinator_types {
 	template <typename... Data>
 	using result_type = detail::result_type<TokenIterator, Data...>;
 
+	using succ = detail::cmb_succ<TokenIterator>;
+
 	using one = detail::cmb_one<TokenIterator>;
 
 	template <typename Combinator>
@@ -594,6 +607,8 @@ struct combinator_values {
 
 	template <typename... Data>
 	using result_type = typename types::template result_type<Data...>;
+
+	static constexpr auto succ = typename types::succ();
 
 	static constexpr auto one = typename types::one();
 

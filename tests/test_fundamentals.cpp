@@ -7,6 +7,15 @@ using int_iterator = typename int_vector::const_iterator;
 using pt = cppcmb::combinator_types<int_iterator>;
 using pv = cppcmb::combinator_values<int_iterator>;
 
+TEST_CASE("'succ' always succeeds, stays in position and returns an empty tuple", "[succ]") {
+	int_vector v = { 1, 2, 3 };
+
+	auto result = pv::succ(std::cbegin(v));
+	REQUIRE(result);
+	REQUIRE(result->first == std::make_tuple());
+	REQUIRE(std::distance(std::cbegin(v), result->second) == 0);
+}
+
 TEST_CASE("'one' takes a single element from the current position", "[one]") {
 	int_vector v = { 1, 2, 3 };
 
