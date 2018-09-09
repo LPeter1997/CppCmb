@@ -12,12 +12,12 @@ TEST_CASE("'one' takes a single element from the current position", "[one]") {
 
 	auto result = pv::one(std::cbegin(v));
 	REQUIRE(result);
-	REQUIRE(std::get<0>(result->first) == 1);
+	REQUIRE(result->first == 1);
 	REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 
 	auto result2 = pv::one(std::cbegin(v) + 1);
 	REQUIRE(result2);
-	REQUIRE(std::get<0>(result2->first) == 2);
+	REQUIRE(result2->first == 2);
 	REQUIRE(std::distance(std::cbegin(v), result2->second) == 2);
 }
 
@@ -34,7 +34,7 @@ TEST_CASE("A constructed match functionality accepts only the predicate", "[matc
 
 	auto result = match<1>(std::cbegin(v));
 	REQUIRE(result);
-	REQUIRE(std::get<0>(result->first) == 1);
+	REQUIRE(result->first == 1);
 	REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 
 	auto result2 = match<2>(std::cbegin(v));
@@ -47,13 +47,13 @@ TEST_CASE("'opt' always succeeds, but does not always consume", "[opt]") {
 	SECTION("on matching the parser advances") {
 		auto result = pv::opt(match<1>)(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first));
+		REQUIRE(result->first);
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 	}
 	SECTION("when not matching, still succeed, but no advancement") {
 		auto result = pv::opt(match<2>)(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(!std::get<0>(result->first));
+		REQUIRE(!result->first);
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 0);
 	}
 }
@@ -87,19 +87,19 @@ TEST_CASE("'alt' tries all the alternatives until one succeeds", "[alt]") {
 	SECTION("succeeding can occur as the first alternative") {
 		auto result = (match<1> | match<2> | match<3>)(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first) == 1);
+		REQUIRE(result->first == 1);
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 	}
 	SECTION("succeeding can occur as some middle alternative") {
 		auto result = (match<2> | match<1> | match<3>)(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first) == 1);
+		REQUIRE(result->first == 1);
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 	}
 	SECTION("succeeding can occur as the last alternative") {
 		auto result = (match<2> | match<3> | match<1>)(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first) == 1);
+		REQUIRE(result->first == 1);
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 	}
 	SECTION("it fails when no alternatives match") {
@@ -108,33 +108,28 @@ TEST_CASE("'alt' tries all the alternatives until one succeeds", "[alt]") {
 	}
 }
 
-template <typename... Ts>
-std::vector<std::tuple<int>> make_tupvec(Ts&&... elems) {
-	return { std::forward<Ts>(elems)... };
-}
-
 TEST_CASE("'rep' collects the same result while it's combinator succeeds", "[rep]") {
 	int_vector v = { 5, 2, 2, 2, 5 };
 
 	SECTION("succeeds on zero matches") {
 		auto result = (pv::rep<std::vector>(match<1>))(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first).size() == 0);
-		REQUIRE(std::get<0>(result->first) == make_tupvec());
+		REQUIRE(result->first.size() == 0);
+		REQUIRE(result->first == int_vector{});
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 0);
 	}
 	SECTION("succeeds on a single match") {
 		auto result = (pv::rep<std::vector>(match<5>))(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first).size() == 1);
-		REQUIRE(std::get<0>(result->first) == make_tupvec(5));
+		REQUIRE(result->first.size() == 1);
+		REQUIRE(result->first == int_vector{ 5 });
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 	}
 	SECTION("succeeds on multiple matches") {
 		auto result = (pv::rep<std::vector>(match<2>))(std::cbegin(v) + 1);
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first).size() == 3);
-		REQUIRE(std::get<0>(result->first) == make_tupvec(2, 2, 2));
+		REQUIRE(result->first.size() == 3);
+		REQUIRE(result->first == int_vector{ 2, 2, 2 });
 		REQUIRE(std::distance(std::cbegin(v) + 1, result->second) == 3);
 	}
 }
@@ -149,15 +144,15 @@ TEST_CASE("'rep1' collects the same result while it's combinator succeeds and ex
 	SECTION("succeeds on a single match") {
 		auto result = (pv::rep1<std::vector>(match<5>))(std::cbegin(v));
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first).size() == 1);
-		REQUIRE(std::get<0>(result->first) == make_tupvec(5));
+		REQUIRE(result->first.size() == 1);
+		REQUIRE(result->first == int_vector{ 5 });
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
 	}
 	SECTION("succeeds on multiple matches") {
 		auto result = (pv::rep1<std::vector>(match<2>))(std::cbegin(v) + 1);
 		REQUIRE(result);
-		REQUIRE(std::get<0>(result->first).size() == 3);
-		REQUIRE(std::get<0>(result->first) == make_tupvec(2, 2, 2));
+		REQUIRE(result->first.size() == 3);
+		REQUIRE(result->first == int_vector{ 2, 2, 2 });
 		REQUIRE(std::distance(std::cbegin(v) + 1, result->second) == 3);
 	}
 }

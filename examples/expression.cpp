@@ -161,7 +161,7 @@ int main() {
 
 	if (result) {
 		std::puts("Success!");
-		std::printf("Evaluates to: %lf\n", std::get<0>(result->first)->eval());
+		std::printf("Evaluates to: %lf\n", result->first->eval());
 	}
 	else {
 		std::puts("Fail!");

@@ -64,14 +64,6 @@ namespace detail {
 	}
 
 	/**
-	 * General result type.
-	 */
-	template <typename TokenIterator, typename... Data>
-	using result_type = std::optional<std::pair<
-		std::tuple<Data...>, TokenIterator
-	>>;
-
-	/**
 	 * A helper functionality that wraps any value into a tuple if it's not
 	 * already a tuple.
 	 */
@@ -120,6 +112,14 @@ namespace detail {
 		return unwrap_tuple_impl<std::decay_t<TFwd>>::pass(
 			std::forward<TFwd>(arg));
 	}
+
+	/**
+	 * General result type.
+	 */
+	template <typename TokenIterator, typename... Data>
+	using result_type = std::optional<std::pair<decltype(
+		unwrap_tuple(std::declval<std::tuple<Data...>>())), TokenIterator
+	>>;
 
 	/**
 	 * We need to forward-declare functionality for the subscript operator.
@@ -190,7 +190,7 @@ namespace detail {
 	 */
 	template <typename TokenIterator>
 	static constexpr auto cmb_one_fn(TokenIterator it) {
-		return make_result(std::make_tuple(*it), std::next(it));
+		return make_result(*it, std::next(it));
 	}
 
 	template <typename TokenIterator>
@@ -206,15 +206,9 @@ namespace detail {
 		if (!res) {
 			// We didn't advance position
 			using data_type = typename Combinator::data_type;
-			return make_result(
-				std::make_tuple(std::optional<data_type>()),
-				it
-			);
+			return make_result(std::optional<data_type>(), it);
 		}
-		return make_result(
-			std::make_tuple(std::make_optional(res->first)),
-			res->second
-		);
+		return make_result(std::make_optional(res->first), res->second);
 	}
 
 	template <typename TokenIterator, typename Combinator>
@@ -236,10 +230,10 @@ namespace detail {
 	static constexpr auto cmb_seq_fn(TokenIterator it) {
 		auto first = First()(it);
 		using result_type = decltype(make_result(
-			std::tuple_cat(
-				first->first, 
-				cmb_seq_fn<TokenIterator, Rest...>(it)->first
-			),
+			unwrap_tuple(std::tuple_cat(
+				as_tuple(first->first),
+				as_tuple(cmb_seq_fn<TokenIterator, Rest...>(it)->first)
+			)),
 			it
 		));
 		if (!first) {
@@ -250,7 +244,10 @@ namespace detail {
 			return result_type();
 		}
 		return make_result(
-			std::tuple_cat(std::move(first->first), std::move(rest->first)),
+			unwrap_tuple(std::tuple_cat(
+				as_tuple(std::move(first->first)),
+				as_tuple(std::move(rest->first))
+			)),
 			rest->second
 		);
 	}
@@ -303,10 +300,7 @@ namespace detail {
 		while (true) {
 			auto res = Combinator()(it);
 			if (!res) {
-				return make_result(
-					std::make_tuple(std::move(result)),
-					it
-				);
+				return make_result(std::move(result), it);
 			}
 			// Advance
 			*out_it++ = std::move(res->first);
@@ -330,7 +324,7 @@ namespace detail {
 	static constexpr auto cmb_rep1_fn(TokenIterator it) {
 		auto res = cmb_rep_fn<TokenIterator, Collection, Combinator>(it);
 		using res_type = decltype(res);
-		if (std::get<0>(res->first).empty()) {
+		if (res->first.empty()) {
 			// Empty, fail
 			return res_type();
 		}
@@ -355,13 +349,13 @@ namespace detail {
 			auto res = Combinator()(it);
 			if (res) {
 				return make_result(
-					as_tuple(std::apply(Mapper(), res->first)),
+					unwrap_tuple(std::apply(Mapper(), as_tuple(res->first))),
 					res->second
 				);
 			}
 			// XXX(LPeter1997): Simplify?
 			using result_type = decltype(make_result(
-				as_tuple(std::apply(Mapper(), res->first)),
+				unwrap_tuple(std::apply(Mapper(), as_tuple(res->first))),
 				it
 			));
 			return result_type();
@@ -377,14 +371,14 @@ namespace detail {
 			auto res = Combinator()(it);
 			// XXX(LPeter1997): Simplify?
 			using result_type = decltype(make_result(
-				as_tuple(*std::apply(Mapper(), res->first)),
+				unwrap_tuple(*std::apply(Mapper(), as_tuple(res->first))),
 				it
 			));
 			if (res) {
-				auto transformed = std::apply(Mapper(), res->first);
+				auto transformed = std::apply(Mapper(), as_tuple(res->first));
 				if (transformed) {
 					return make_result(
-						as_tuple(std::move(*transformed)),
+						unwrap_tuple(std::move(*transformed)),
 						res->second
 					);
 				}
@@ -404,7 +398,7 @@ namespace detail {
 		using combinator_result = decltype(Combinator()(it));
 		using transform_result = decltype(std::apply(
 			Mapper(),
-			std::declval<combinator_result>()->first
+			as_tuple(std::declval<combinator_result>()->first)
 		));
 		return cmb_map_impl<std::decay_t<transform_result>,
 			TokenIterator, Combinator, Mapper>::pass(it);
@@ -424,14 +418,16 @@ namespace detail {
 		constexpr filter_impl() = default;
 
 		template <typename... Ts>
-		constexpr expected<std::tuple<std::decay_t<Ts>...>>
-		operator()(Ts&&... args) const {
+		constexpr auto operator()(Ts&&... args) const {
+			using res_type = decltype(make_expected(
+				unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
+			));
 			if (Predicate()(args...)) {
 				return make_expected(
-					std::make_tuple(std::forward<Ts>(args)...)
+					unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
 				);
 			}
-			return std::nullopt;
+			return res_type();
 		}
 	};
 
@@ -444,9 +440,9 @@ namespace detail {
 
 		template <typename... Ts>
 		constexpr auto operator()(Ts&&... args) const {
-			return std::make_tuple(std::get<Indicies>(
+			return unwrap_tuple(std::make_tuple(std::get<Indicies>(
 				std::make_tuple(std::forward<Ts>(args)...)
-			)...);
+			)...));
 		}
 	};
 
