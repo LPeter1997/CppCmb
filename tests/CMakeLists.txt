@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -pedantic")
 set(ALL_SOURCES
 	catch.cpp
 	test_fundamentals.cpp
+	test_wiki_code.cpp
 )
 
 add_executable(tests ${ALL_SOURCES})
