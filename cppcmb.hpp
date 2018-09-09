@@ -97,6 +97,31 @@ namespace detail {
 	}
 
 	/**
+	 * A helper functionality that unwraps a tuple if it can.
+	 */
+	template <typename T>
+	struct unwrap_tuple_impl {
+		template <typename TFwd>
+		static constexpr auto pass(TFwd&& arg) {
+			return arg;
+		}
+	};
+
+	template <typename T>
+	struct unwrap_tuple_impl<std::tuple<T>> {
+		template <typename TFwd>
+		static constexpr auto pass(TFwd&& arg) {
+			return std::get<0>(std::forward<TFwd>(arg));
+		}
+	};
+
+	template <typename TFwd>
+	static constexpr auto unwrap_tuple(TFwd&& arg) {
+		return unwrap_tuple_impl<std::decay_t<TFwd>>::pass(
+			std::forward<TFwd>(arg));
+	}
+
+	/**
 	 * We need to forward-declare functionality for the subscript operator.
 	 */
 	template <typename Combinator, typename Mapper>
@@ -492,6 +517,21 @@ struct combinator_types {
 	template <typename T>
 	using expected = detail::expected<T>;
 
+	template <typename T>
+	constexpr auto make_expected(T&& val) {
+		return detail::make_expected(std::forward<T>(val));
+	}
+
+	template <typename T, typename... Args> 
+	constexpr auto make_expected(Args&&... args) {
+		return detail::make_expected<T>(std::forward<Args>(args)...);
+	}
+
+	template <typename T, typename U, typename... Args> 
+	constexpr auto make_expected(std::initializer_list<U> il, Args&&... args) {
+		return detail::make_expected<T>(il, std::forward<Args>(args)...);
+	}
+
 	template <typename... Data>
 	using result_type = detail::result_type<TokenIterator, Data...>;
 
@@ -540,6 +580,21 @@ struct combinator_values {
 
 	template <typename T>
 	using expected = typename types::template expected<T>;
+
+	template <typename T>
+	constexpr auto make_expected(T&& val) {
+		return detail::make_expected(std::forward<T>(val));
+	}
+
+	template <typename T, typename... Args> 
+	constexpr auto make_expected(Args&&... args) {
+		return detail::make_expected<T>(std::forward<Args>(args)...);
+	}
+
+	template <typename T, typename U, typename... Args> 
+	constexpr auto make_expected(std::initializer_list<U> il, Args&&... args) {
+		return detail::make_expected<T>(il, std::forward<Args>(args)...);
+	}
 
 	template <typename... Data>
 	using result_type = typename types::template result_type<Data...>;
