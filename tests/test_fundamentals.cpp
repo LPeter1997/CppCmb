@@ -56,6 +56,18 @@ TEST_CASE("'opt' always succeeds, but does not always consume", "[opt]") {
 		REQUIRE(!result->first);
 		REQUIRE(std::distance(std::cbegin(v), result->second) == 0);
 	}
+	SECTION("on matching the parser advances (with operator)") {
+		auto result = (~match<1>)(std::cbegin(v));
+		REQUIRE(result);
+		REQUIRE(result->first);
+		REQUIRE(std::distance(std::cbegin(v), result->second) == 1);
+	}
+	SECTION("when not matching, still succeed, but no advancement (with operator)") {
+		auto result = (~match<2>)(std::cbegin(v));
+		REQUIRE(result);
+		REQUIRE(!result->first);
+		REQUIRE(std::distance(std::cbegin(v), result->second) == 0);
+	}
 }
 
 TEST_CASE("'seq' succeeds when all it's elements succeed", "[seq]") {

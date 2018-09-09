@@ -678,6 +678,21 @@ namespace detail {
  */
 
 /**
+ * Optional.
+ */
+template <typename Combinator, 
+	typename = cppcmb::detail::enable_if_combinator_t<Combinator>>
+static constexpr auto operator~(Combinator&& c) {
+	using combinator_t = std::decay_t<Combinator>;
+
+	using iter_type = typename combinator_t::iterator_type;
+
+	return cppcmb::combinator_values<iter_type>::opt(
+		std::forward<Combinator>(c)
+	);
+}
+
+/**
  * Sequencing.
  */
 template <typename Left, typename Right,

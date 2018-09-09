@@ -253,6 +253,16 @@ TEST_CASE("transform signed token to int", "[Transformations]") {
 		REQUIRE(result);
 		REQUIRE(result->first == -123);
 	}
+	SECTION("using the optional and mapping operator") {
+		// The parser itself
+		auto parser = (~(term_v<token::add> | term_v<token::sub>) & term_v<token::num>)[pv::fn<to_int>];
+		auto tokens = lex("-123");
+
+		auto result = parser(std::cbegin(tokens));
+
+		REQUIRE(result);
+		REQUIRE(result->first == -123);
+	}
 }
 
 // Expressions /////////////////////////////////////////////////////////////////
