@@ -17,8 +17,7 @@ See the [wiki](https://github.com/LPeter1997/CppCmb/wiki) for documentation and 
 You can open issues, or do a pull-request if you've implemented/fixed something.
 
 # To do:
-* Automatic single-element tuple unwrapping when possible
-* Create regression tests
+* Create more tests
 * Add more examples
 * Test and make it work on MSVC (currently only workd with GCC, untested on everything else)
 * Add static assertions to make the library easier to use (for example not passing function wrapper)
