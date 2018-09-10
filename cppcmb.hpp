@@ -29,11 +29,17 @@ namespace detail {
 	 */
 	template <typename T>
 	struct expected : private std::optional<T> {
+		constexpr expected(expected const&) = default;
+		constexpr expected(expected&&) = default;
+
+		expected& operator=(expected const&) = default;
+		expected& operator=(expected&&) = default;
+
 		expected(std::optional<T> const&) = delete;
 		expected(std::optional<T>&&) = delete;
 
-		expected(expected const&) = default;
-		expected(expected&&) = default;
+		std::optional<T>& operator=(std::optional<T> const&) = delete;
+		std::optional<T>& operator=(std::optional<T>&&) = delete;
 
 		using std::optional<T>::optional;
 		using std::optional<T>::operator=;
@@ -117,8 +123,9 @@ namespace detail {
 	 * General result type.
 	 */
 	template <typename TokenIterator, typename... Data>
-	using result_type = std::optional<std::pair<decltype(
-		unwrap_tuple(std::declval<std::tuple<Data...>>())), TokenIterator
+	using result_type = std::optional<std::pair<
+		decltype(unwrap_tuple(std::declval<std::tuple<Data...>>())),
+		TokenIterator
 	>>;
 
 	/**
