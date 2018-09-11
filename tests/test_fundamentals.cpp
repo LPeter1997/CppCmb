@@ -16,6 +16,13 @@ TEST_CASE("'succ' always succeeds, stays in position and returns an empty tuple"
 	REQUIRE(std::distance(std::cbegin(v), result->second) == 0);
 }
 
+TEST_CASE("'fail' always fails", "[fail]") {
+	int_vector v = { 1, 2, 3 };
+
+	auto result = pv::fail<>(std::cbegin(v));
+	REQUIRE(!result);
+}
+
 TEST_CASE("'one' takes a single element from the current position", "[one]") {
 	int_vector v = { 1, 2, 3 };
 

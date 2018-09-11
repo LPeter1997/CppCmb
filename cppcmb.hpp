@@ -203,6 +203,17 @@ namespace detail {
 	using cmb_succ = fn_wrap<cmb_succ_fn<TokenIterator>, TokenIterator>;
 
 	/**
+	 * A combinator that always fails with a given data type.
+	 */
+	template <typename TokenIterator, typename... Ts>
+	static constexpr auto cmb_fail_fn(TokenIterator) {
+		return result_type<TokenIterator, Ts...>();
+	}
+
+	template <typename TokenIterator, typename... Ts>
+	using cmb_fail = fn_wrap<cmb_fail_fn<TokenIterator, Ts...>, TokenIterator>;
+
+	/**
 	 * A combinator that returns the current token and advances the position by
 	 * one.
 	 */
@@ -551,6 +562,9 @@ struct combinator_types {
 
 	using succ = detail::cmb_succ<TokenIterator>;
 
+	template <typename... Ts>
+	using fail = detail::cmb_fail<TokenIterator, Ts...>;
+
 	using one = detail::cmb_one<TokenIterator>;
 
 	template <typename Combinator>
@@ -618,6 +632,9 @@ struct combinator_values {
 	static constexpr auto succ = typename types::succ();
 
 	static constexpr auto one = typename types::one();
+
+	template <typename... Ts>
+	static constexpr auto fail = typename types::template fail<Ts...>();
 
 	template <typename Combinator>
 	static constexpr auto opt(Combinator&&) {
