@@ -28,15 +28,15 @@ namespace detail {
 	 * returned by a mapping failure.
 	 */
 	template <typename T>
-	struct expected : private std::optional<T> {
-		constexpr expected(expected const&) = default;
-		constexpr expected(expected&&) = default;
+	struct maybe : private std::optional<T> {
+		constexpr maybe(maybe const&) = default;
+		constexpr maybe(maybe&&) = default;
 
-		expected& operator=(expected const&) = default;
-		expected& operator=(expected&&) = default;
+		maybe& operator=(maybe const&) = default;
+		maybe& operator=(maybe&&) = default;
 
-		expected(std::optional<T> const&) = delete;
-		expected(std::optional<T>&&) = delete;
+		maybe(std::optional<T> const&) = delete;
+		maybe(std::optional<T>&&) = delete;
 
 		std::optional<T>& operator=(std::optional<T> const&) = delete;
 		std::optional<T>& operator=(std::optional<T>&&) = delete;
@@ -55,18 +55,18 @@ namespace detail {
 	 * Helper function to make the failable type.
 	 */
 	template <typename T>
-	constexpr auto make_expected(T&& val) {
-		return expected<std::decay_t<T>>(std::forward<T>(val));
+	constexpr auto make_maybe(T&& val) {
+		return maybe<std::decay_t<T>>(std::forward<T>(val));
 	}
 
 	template <typename T, typename... Args> 
-	constexpr auto make_expected(Args&&... args) {
-		return expected<T>(std::in_place, std::forward<Args>(args)...);
+	constexpr auto make_maybe(Args&&... args) {
+		return maybe<T>(std::in_place, std::forward<Args>(args)...);
 	}
 
 	template <typename T, typename U, typename... Args> 
-	constexpr auto make_expected(std::initializer_list<U> il, Args&&... args) {
-		return expected<T>(std::in_place, il, std::forward<Args>(args)...);
+	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
+		return maybe<T>(std::in_place, il, std::forward<Args>(args)...);
 	}
 
 	/**
@@ -393,7 +393,7 @@ namespace detail {
 
 	template <typename TokenIterator, typename Combinator, typename Mapper,
 		typename T>
-	struct cmb_map_impl<expected<T>, TokenIterator, Combinator, Mapper> {
+	struct cmb_map_impl<maybe<T>, TokenIterator, Combinator, Mapper> {
 		constexpr cmb_map_impl() = default;
 
 		static constexpr auto pass(TokenIterator it) {
@@ -448,11 +448,11 @@ namespace detail {
 
 		template <typename... Ts>
 		constexpr auto operator()(Ts&&... args) const {
-			using res_type = decltype(make_expected(
+			using res_type = decltype(make_maybe(
 				unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
 			));
 			if (Predicate()(args...)) {
-				return make_expected(
+				return make_maybe(
 					unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
 				);
 			}
@@ -540,21 +540,21 @@ namespace detail {
 template <typename TokenIterator>
 struct combinator_types {
 	template <typename T>
-	using expected = detail::expected<T>;
+	using maybe = detail::maybe<T>;
 
 	template <typename T>
-	constexpr auto make_expected(T&& val) {
-		return detail::make_expected(std::forward<T>(val));
+	constexpr auto make_maybe(T&& val) {
+		return detail::make_maybe(std::forward<T>(val));
 	}
 
 	template <typename T, typename... Args> 
-	constexpr auto make_expected(Args&&... args) {
-		return detail::make_expected<T>(std::forward<Args>(args)...);
+	constexpr auto make_maybe(Args&&... args) {
+		return detail::make_maybe<T>(std::forward<Args>(args)...);
 	}
 
 	template <typename T, typename U, typename... Args> 
-	constexpr auto make_expected(std::initializer_list<U> il, Args&&... args) {
-		return detail::make_expected<T>(il, std::forward<Args>(args)...);
+	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
+		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
 
 	template <typename... Data>
@@ -609,21 +609,21 @@ struct combinator_values {
 	using types = combinator_types<TokenIterator>;
 
 	template <typename T>
-	using expected = typename types::template expected<T>;
+	using maybe = typename types::template maybe<T>;
 
 	template <typename T>
-	constexpr auto make_expected(T&& val) {
-		return detail::make_expected(std::forward<T>(val));
+	constexpr auto make_maybe(T&& val) {
+		return detail::make_maybe(std::forward<T>(val));
 	}
 
 	template <typename T, typename... Args> 
-	constexpr auto make_expected(Args&&... args) {
-		return detail::make_expected<T>(std::forward<Args>(args)...);
+	constexpr auto make_maybe(Args&&... args) {
+		return detail::make_maybe<T>(std::forward<Args>(args)...);
 	}
 
 	template <typename T, typename U, typename... Args> 
-	constexpr auto make_expected(std::initializer_list<U> il, Args&&... args) {
-		return detail::make_expected<T>(il, std::forward<Args>(args)...);
+	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
+		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
 
 	template <typename... Data>
