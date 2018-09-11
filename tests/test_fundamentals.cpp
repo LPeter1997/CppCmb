@@ -19,7 +19,7 @@ TEST_CASE("'succ' always succeeds, stays in position and returns an empty tuple"
 TEST_CASE("'fail' always fails", "[fail]") {
 	int_vector v = { 1, 2, 3 };
 
-	auto result = pv::fail<>(std::cbegin(v));
+	auto result = pv::fail<std::tuple<>>(std::cbegin(v));
 	REQUIRE(!result);
 }
 
