@@ -59,12 +59,12 @@ namespace detail {
 		return maybe<std::decay_t<T>>(std::forward<T>(val));
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T, typename... Args>
 	constexpr auto make_maybe(Args&&... args) {
 		return maybe<T>(std::in_place, std::forward<Args>(args)...);
 	}
 
-	template <typename T, typename U, typename... Args> 
+	template <typename T, typename U, typename... Args>
 	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
 		return maybe<T>(std::in_place, il, std::forward<Args>(args)...);
 	}
@@ -135,7 +135,7 @@ namespace detail {
 	static constexpr auto make_subscript_map(Combinator&&, Mapper&&);
 
 	/**
-	 * Wraps a free function into a functor type. Cannot be lambda or 
+	 * Wraps a free function into a functor type. Cannot be lambda or
 	 * std::function. If a TokenIterator type is provided, it becomes a
 	 * combinator function.
 	 * Every combinator function must be wrapped in this.
@@ -322,7 +322,7 @@ namespace detail {
 	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
 	 * Collects result into a collection. Always succeeds.
 	 */
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep_fn(TokenIterator it) {
 		using element_type = typename Combinator::data_type;
@@ -339,7 +339,7 @@ namespace detail {
 		}
 	}
 
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	using cmb_rep = fn_wrap<
 		cmb_rep_fn<TokenIterator, Collection, Combinator>, TokenIterator
@@ -350,7 +350,7 @@ namespace detail {
 	 * Collects result into a collection. Succeeds if it collected at least one
 	 * element.
 	 */
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep1_fn(TokenIterator it) {
 		auto res = cmb_rep_fn<TokenIterator, Collection, Combinator>(it);
@@ -362,7 +362,7 @@ namespace detail {
 		return res;
 	}
 
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	using cmb_rep1 = fn_wrap<
 		cmb_rep1_fn<TokenIterator, Collection, Combinator>, TokenIterator
@@ -549,12 +549,12 @@ struct combinator_types {
 		return detail::make_maybe(std::forward<T>(val));
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T, typename... Args>
 	constexpr auto make_maybe(Args&&... args) {
 		return detail::make_maybe<T>(std::forward<Args>(args)...);
 	}
 
-	template <typename T, typename U, typename... Args> 
+	template <typename T, typename U, typename... Args>
 	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
 		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
@@ -618,12 +618,12 @@ struct combinator_values {
 		return detail::make_maybe(std::forward<T>(val));
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T, typename... Args>
 	constexpr auto make_maybe(Args&&... args) {
 		return detail::make_maybe<T>(std::forward<Args>(args)...);
 	}
 
-	template <typename T, typename U, typename... Args> 
+	template <typename T, typename U, typename... Args>
 	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
 		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
@@ -684,7 +684,7 @@ struct combinator_values {
 	}
 
 	template <std::size_t... Indicies>
-	static constexpr auto select = 
+	static constexpr auto select =
 		typename types::template select<Indicies...>();
 
 	template <typename Folder>
@@ -721,7 +721,7 @@ namespace detail {
 /**
  * Optional.
  */
-template <typename Combinator, 
+template <typename Combinator,
 	typename = cppcmb::detail::enable_if_combinator_t<Combinator>>
 static constexpr auto operator~(Combinator&& c) {
 	using combinator_t = std::decay_t<Combinator>;
