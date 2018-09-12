@@ -139,7 +139,7 @@ expr_t* to_bin_expr_r(std::tuple<expr_t*, token> const& left, expr_t* right) {
 
 pv::result_type<expr_t*> expression(token_iterator it) {
 	constexpr auto atomic =
-		  (term_v<token::lparen> & pv::wrap<expression> & term_v<token::rparen>)[pv::select<1>]
+		  (term_v<token::lparen> & pv::cmb<expression> & term_v<token::rparen>)[pv::select<1>]
 		| term_v<token::num>[pv::fn<to_int_expr>]
 		;
 	constexpr auto exponentiation =
@@ -156,7 +156,7 @@ pv::result_type<expr_t*> expression(token_iterator it) {
 
 int main() {
 	auto tokens = lex("2*(1+2)^3+1-2+3");
-	auto parser = pv::wrap<expression>;
+	auto parser = pv::cmb<expression>;
 	auto result = parser(std::cbegin(tokens));
 
 	if (result) {

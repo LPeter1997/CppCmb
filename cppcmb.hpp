@@ -592,7 +592,7 @@ struct combinator_types {
 	using map = detail::cmb_map<TokenIterator, Combinator, Mapper>;
 
 	template <auto Fn>
-	using wrap = detail::cmb_wrap<TokenIterator, Fn>;
+	using cmb = detail::cmb_wrap<TokenIterator, Fn>;
 
 	template <auto Fn>
 	using fn = detail::fn_wrap<Fn>;
@@ -677,7 +677,7 @@ struct combinator_values {
 	}
 
 	template <auto Fn>
-	static constexpr auto wrap = typename types::template wrap<Fn>();
+	static constexpr auto cmb = typename types::template cmb<Fn>();
 
 	template <auto Fn>
 	static constexpr auto fn = typename types::template fn<Fn>();

@@ -100,11 +100,11 @@ constexpr pv::result_type<token> match_combinator(token_iterator it) {
 
 // Template-style
 template <token::type Expected_Type>
-using term_t = pt::wrap<match_combinator<Expected_Type>>;
+using term_t = pt::cmb<match_combinator<Expected_Type>>;
 
 // Value-style
 template <token::type Expected_Type>
-static constexpr auto term_v = pv::wrap<match_combinator<Expected_Type>>;
+static constexpr auto term_v = pv::cmb<match_combinator<Expected_Type>>;
 
 TEST_CASE("matching a token", "[Matching a token]") {
 	auto tokens = lex("+12");
@@ -325,7 +325,7 @@ expr_t* to_bin_expr_r(std::tuple<expr_t*, token> const& left, expr_t* right) {
 
 pv::result_type<expr_t*> expression(token_iterator it) {
 	constexpr auto atomic =
-		  (term_v<token::lparen> & pv::wrap<expression> & term_v<token::rparen>)[pv::select<1>]
+		  (term_v<token::lparen> & pv::cmb<expression> & term_v<token::rparen>)[pv::select<1>]
 		| term_v<token::num>[pv::fn<to_int_expr>]
 		;
 	constexpr auto exponentiation =
@@ -346,7 +346,7 @@ bool is_double_eq(double d1, double d2) {
 
 TEST_CASE("parsing a math expression", "[Advanced parsing and recursion]") {
 	auto tokens = lex("2*(1+2)^3+1-2+3");
-	auto parser = pv::wrap<expression>;
+	auto parser = pv::cmb<expression>;
 	auto result = parser(std::cbegin(tokens));
 
 	REQUIRE(result);
