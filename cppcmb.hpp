@@ -299,9 +299,11 @@ namespace detail {
 	template <typename TokenIterator, typename ResultData,
 		typename First, typename... Rest>
 	static constexpr auto cmb_alt_fn(TokenIterator it) {
-		auto first = First()(it);
-		if (first) {
-			return first;
+		/* Remove a TCO impediment */ {
+			auto first = First()(it);
+			if (first) {
+				return first;
+			}
 		}
 		return cmb_alt_fn<TokenIterator, ResultData, Rest...>(it);
 	}
