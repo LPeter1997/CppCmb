@@ -135,16 +135,12 @@ namespace detail {
 	static constexpr auto make_subscript_map(Combinator&&, Mapper&&);
 
 	/**
-	 * Wraps a free function into a functor type. Cannot be lambda or 
-	 * std::function. If a TokenIterator type is provided, it becomes a
-	 * combinator function.
-	 * Every combinator function must be wrapped in this.
+	 * Wraps a free function into a functor type so we can pass it around as a
+	 * type. Every non-combinator function (like transformations) has to be
+	 * wrapped in this.
 	 */
-	template <auto, typename...>
-	struct fn_wrap;
-
 	template <auto Callable>
-	struct fn_wrap<Callable> {
+	struct fn_wrap {
 		constexpr fn_wrap() = default;
 
 		template <typename... Ts>
@@ -153,23 +149,33 @@ namespace detail {
 		}
 	};
 
-	template <auto Callable, typename TokenIterator>
-	struct fn_wrap<Callable, TokenIterator> {
-		// Define common types
-		using iterator_type = TokenIterator;
-		using callable_type = std::decay_t<decltype(Callable)>;
+	/**
+	 * Wraps a free function to act as a combinator function. Every combinator
+	 * must be wrapped in this.
+	 */
+	template <typename TokenIterator, auto Callable>
+	struct cmb_wrap {
+	private:
+		using callable_type = std::decay_t<decltype(Callable)> ;
+		static_assert(
+			std::is_invocable_v<callable_type, TokenIterator>,
+			"A combinator must be able to be invoked with the provided iterator"
+			" type!"
+		);
 		using return_type = std::invoke_result_t<callable_type, TokenIterator>;
 		using pair_type = typename return_type::value_type;
+
+	public:
 		using data_type = typename pair_type::first_type;
+		using iterator_type = typename pair_type::second_type;
 
 		static_assert(
-			std::is_same_v<typename pair_type::second_type, TokenIterator>,
-			"Iterator type mismatch in function wrapper!"
+			std::is_same_v<TokenIterator, iterator_type>,
+			"The resulting iterator type must match the provided one!"
 		);
 
-		constexpr fn_wrap() = default;
+		constexpr cmb_wrap() = default;
 
-		template <typename... Ts>
 		constexpr auto operator()(TokenIterator it) const {
 			return Callable(it);
 		}
@@ -200,7 +206,7 @@ namespace detail {
 	}
 
 	template <typename TokenIterator>
-	using cmb_succ = fn_wrap<cmb_succ_fn<TokenIterator>, TokenIterator>;
+	using cmb_succ = cmb_wrap<TokenIterator, cmb_succ_fn<TokenIterator>>;
 
 	/**
 	 * A combinator that always fails with a given data type.
@@ -211,7 +217,7 @@ namespace detail {
 	}
 
 	template <typename TokenIterator, typename T>
-	using cmb_fail = fn_wrap<cmb_fail_fn<TokenIterator, T>, TokenIterator>;
+	using cmb_fail = cmb_wrap<TokenIterator, cmb_fail_fn<TokenIterator, T>>;
 
 	/**
 	 * A combinator that returns the current token and advances the position by
@@ -223,7 +229,7 @@ namespace detail {
 	}
 
 	template <typename TokenIterator>
-	using cmb_one = fn_wrap<cmb_one_fn<TokenIterator>, TokenIterator>;
+	using cmb_one = cmb_wrap<TokenIterator, cmb_one_fn<TokenIterator>>;
 
 	/**
 	 * Wraps another combinator so that it's return data becomes optional. This
@@ -241,8 +247,8 @@ namespace detail {
 	}
 
 	template <typename TokenIterator, typename Combinator>
-	using cmb_opt = fn_wrap<
-		cmb_opt_fn<TokenIterator, Combinator>, TokenIterator
+	using cmb_opt = cmb_wrap<
+		TokenIterator, cmb_opt_fn<TokenIterator, Combinator>
 	>;
 
 	/**
@@ -282,8 +288,8 @@ namespace detail {
 	}
 
 	template <typename TokenIterator, typename... Combinators>
-	using cmb_seq = fn_wrap<
-		cmb_seq_fn<TokenIterator, Combinators...>, TokenIterator
+	using cmb_seq = cmb_wrap<
+		TokenIterator, cmb_seq_fn<TokenIterator, Combinators...>
 	>;
 
 	/**
@@ -307,13 +313,13 @@ namespace detail {
 	}
 
 	template <typename TokenIterator, typename First, typename... Rest>
-	using cmb_alt = fn_wrap<
+	using cmb_alt = cmb_wrap<
+		TokenIterator,
 		cmb_alt_fn<
 			TokenIterator,
 			typename First::data_type,
 			First, Rest...
-		>,
-		TokenIterator
+		>
 	>;
 
 	/**
@@ -339,8 +345,8 @@ namespace detail {
 
 	template <typename TokenIterator, 
 		template <typename...> typename Collection, typename Combinator>
-	using cmb_rep = fn_wrap<
-		cmb_rep_fn<TokenIterator, Collection, Combinator>, TokenIterator
+	using cmb_rep = cmb_wrap<
+		TokenIterator, cmb_rep_fn<TokenIterator, Collection, Combinator>
 	>;
 
 	/**
@@ -362,8 +368,8 @@ namespace detail {
 
 	template <typename TokenIterator, 
 		template <typename...> typename Collection, typename Combinator>
-	using cmb_rep1 = fn_wrap<
-		cmb_rep1_fn<TokenIterator, Collection, Combinator>, TokenIterator
+	using cmb_rep1 = cmb_wrap<
+		TokenIterator, cmb_rep1_fn<TokenIterator, Collection, Combinator>
 	>;
 
 	/**
@@ -434,8 +440,8 @@ namespace detail {
 	}
 
 	template <typename TokenIterator, typename Combinator, typename Mapper>
-	using cmb_map = fn_wrap<
-		cmb_map_fn<TokenIterator, Combinator, Mapper>, TokenIterator
+	using cmb_map = cmb_wrap<
+		TokenIterator, cmb_map_fn<TokenIterator, Combinator, Mapper>
 	>;
 
 	/**
@@ -511,13 +517,13 @@ namespace detail {
 
 	/**
 	 * Mechanism for matching combinators. This is the reason we need all
-	 * combinators as fn_wrap-s.
+	 * combinators as cmb_wrap-s.
 	 */
 	template <typename T>
 	struct is_combinator : std::false_type {};
 
-	template <auto Callable, typename TokenIterator>
-	struct is_combinator<fn_wrap<Callable, TokenIterator>> : std::true_type {};
+	template <typename TokenIterator, auto Callable>
+	struct is_combinator<cmb_wrap<TokenIterator, Callable>> : std::true_type {};
 
 	template <typename T>
 	static constexpr bool is_combinator_v = is_combinator<T>::value;
@@ -586,7 +592,7 @@ struct combinator_types {
 	using map = detail::cmb_map<TokenIterator, Combinator, Mapper>;
 
 	template <auto Fn>
-	using wrap = detail::fn_wrap<Fn, TokenIterator>;
+	using wrap = detail::cmb_wrap<TokenIterator, Fn>;
 
 	template <auto Fn>
 	using fn = detail::fn_wrap<Fn>;
