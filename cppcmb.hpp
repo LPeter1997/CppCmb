@@ -90,7 +90,7 @@ namespace detail {
 	};
 
 	template <typename TFwd>
-	static constexpr auto as_tuple(TFwd&& arg) {
+	constexpr auto as_tuple(TFwd&& arg) {
 		return as_tuple_impl<std::decay_t<TFwd>>::pass(std::forward<TFwd>(arg));
 	}
 
@@ -114,7 +114,7 @@ namespace detail {
 	};
 
 	template <typename TFwd>
-	static constexpr auto unwrap_tuple(TFwd&& arg) {
+	constexpr auto unwrap_tuple(TFwd&& arg) {
 		return unwrap_tuple_impl<std::decay_t<TFwd>>::pass(
 			std::forward<TFwd>(arg));
 	}
@@ -132,7 +132,7 @@ namespace detail {
 	 * We need to forward-declare functionality for the subscript operator.
 	 */
 	template <typename Combinator, typename Mapper>
-	static constexpr auto make_subscript_map(Combinator&&, Mapper&&);
+	constexpr auto make_subscript_map(Combinator&&, Mapper&&);
 
 	/**
 	 * Wraps a free function into a functor type so we can pass it around as a
@@ -191,7 +191,7 @@ namespace detail {
 	 * Result values are in the form of ((data...), position)?.
 	 */
 	template <typename Data, typename TokenIterator>
-	static constexpr auto make_result(Data&& data, TokenIterator it) {
+	constexpr auto make_result(Data&& data, TokenIterator it) {
 		return std::make_optional(std::make_pair(
 			std::forward<Data>(data), it
 		));
@@ -707,7 +707,7 @@ struct combinator_values {
  */
 namespace detail {
 	template <typename Combinator, typename Mapper>
-	static constexpr auto make_subscript_map(Combinator&& c, Mapper&& m) {
+	constexpr auto make_subscript_map(Combinator&& c, Mapper&& m) {
 		using combinator_t = std::decay_t<Combinator>;
 		using iter_type = typename combinator_t::iterator_type;
 
@@ -727,7 +727,7 @@ namespace detail {
  */
 template <typename Combinator, 
 	typename = cppcmb::detail::enable_if_combinator_t<Combinator>>
-static constexpr auto operator~(Combinator&& c) {
+constexpr auto operator~(Combinator&& c) {
 	using combinator_t = std::decay_t<Combinator>;
 
 	using iter_type = typename combinator_t::iterator_type;
@@ -743,7 +743,7 @@ static constexpr auto operator~(Combinator&& c) {
 template <typename Left, typename Right,
 	typename = cppcmb::detail::enable_if_combinator_t<Left>,
 	typename = cppcmb::detail::enable_if_combinator_t<Right>>
-static constexpr auto operator&(Left&& l, Right&& r) {
+constexpr auto operator&(Left&& l, Right&& r) {
 	using left_t = std::decay_t<Left>;
 	using right_t = std::decay_t<Right>;
 
@@ -764,7 +764,7 @@ static constexpr auto operator&(Left&& l, Right&& r) {
 template <typename Left, typename Right,
 	typename = cppcmb::detail::enable_if_combinator_t<Left>,
 	typename = cppcmb::detail::enable_if_combinator_t<Right>>
-static constexpr auto operator|(Left&& l, Right&& r) {
+constexpr auto operator|(Left&& l, Right&& r) {
 	using left_t = std::decay_t<Left>;
 	using right_t = std::decay_t<Right>;
 
