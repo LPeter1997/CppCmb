@@ -59,12 +59,12 @@ namespace detail {
 		return maybe<std::decay_t<T>>(std::forward<T>(val));
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T, typename... Args>
 	constexpr auto make_maybe(Args&&... args) {
 		return maybe<T>(std::in_place, std::forward<Args>(args)...);
 	}
 
-	template <typename T, typename U, typename... Args> 
+	template <typename T, typename U, typename... Args>
 	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
 		return maybe<T>(std::in_place, il, std::forward<Args>(args)...);
 	}
@@ -305,8 +305,7 @@ namespace detail {
 	template <typename TokenIterator, typename ResultData,
 		typename First, typename... Rest>
 	static constexpr auto cmb_alt_fn(TokenIterator it) {
-		auto first = First()(it);
-		if (first) {
+		if (auto first = First()(it)) {
 			return first;
 		}
 		return cmb_alt_fn<TokenIterator, ResultData, Rest...>(it);
@@ -326,7 +325,7 @@ namespace detail {
 	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
 	 * Collects result into a collection. Always succeeds.
 	 */
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep_fn(TokenIterator it) {
 		using element_type = typename Combinator::data_type;
@@ -343,7 +342,7 @@ namespace detail {
 		}
 	}
 
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	using cmb_rep = cmb_wrap<
 		TokenIterator, cmb_rep_fn<TokenIterator, Collection, Combinator>
@@ -354,7 +353,7 @@ namespace detail {
 	 * Collects result into a collection. Succeeds if it collected at least one
 	 * element.
 	 */
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep1_fn(TokenIterator it) {
 		auto res = cmb_rep_fn<TokenIterator, Collection, Combinator>(it);
@@ -366,7 +365,7 @@ namespace detail {
 		return res;
 	}
 
-	template <typename TokenIterator, 
+	template <typename TokenIterator,
 		template <typename...> typename Collection, typename Combinator>
 	using cmb_rep1 = cmb_wrap<
 		TokenIterator, cmb_rep1_fn<TokenIterator, Collection, Combinator>
@@ -538,7 +537,7 @@ namespace detail {
 
 	template <typename T>
 	using enable_if_combinator_t = typename enable_if_combinator<T>::type;
-}
+} /* namespace detail */
 
 /**
  * A module interface for a template-style grammar definition.
@@ -553,12 +552,12 @@ struct combinator_types {
 		return detail::make_maybe(std::forward<T>(val));
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T, typename... Args>
 	constexpr auto make_maybe(Args&&... args) {
 		return detail::make_maybe<T>(std::forward<Args>(args)...);
 	}
 
-	template <typename T, typename U, typename... Args> 
+	template <typename T, typename U, typename... Args>
 	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
 		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
@@ -622,12 +621,12 @@ struct combinator_values {
 		return detail::make_maybe(std::forward<T>(val));
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T, typename... Args>
 	constexpr auto make_maybe(Args&&... args) {
 		return detail::make_maybe<T>(std::forward<Args>(args)...);
 	}
 
-	template <typename T, typename U, typename... Args> 
+	template <typename T, typename U, typename... Args>
 	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
 		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
@@ -688,7 +687,7 @@ struct combinator_values {
 	}
 
 	template <std::size_t... Indicies>
-	static constexpr auto select = 
+	static constexpr auto select =
 		typename types::template select<Indicies...>();
 
 	template <typename Folder>
@@ -714,7 +713,7 @@ namespace detail {
 		return combinator_values<iter_type>::map(
 			std::forward<Combinator>(c), std::forward<Mapper>(m));
 	}
-}
+} /* namespace detail */
 
 } /* namespace cppcmb */
 
@@ -725,7 +724,7 @@ namespace detail {
 /**
  * Optional.
  */
-template <typename Combinator, 
+template <typename Combinator,
 	typename = cppcmb::detail::enable_if_combinator_t<Combinator>>
 constexpr auto operator~(Combinator&& c) {
 	using combinator_t = std::decay_t<Combinator>;
