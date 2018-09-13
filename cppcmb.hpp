@@ -287,6 +287,17 @@ namespace detail {
 
 	template <typename T>
 	using enable_if_combinator_t = typename enable_if_combinator<T>::type;
+
+	/**
+	 * Check if a type is a function pointer.
+	 */
+	template <typename T>
+	struct is_function_ptr : std::bool_constant<
+		std::is_pointer_v<T> && std::is_function_v<std::remove_pointer_t<T>>
+	> { };
+
+	template <typename T>
+	inline constexpr bool is_function_ptr_v = is_function_ptr<T>::value;
 } /* namespace detail */
 
 /**
@@ -363,6 +374,11 @@ private:
 	 */
 	template <typename First, typename... Rest>
 	static constexpr auto cmb_seq_fn(TokenIterator it) {
+		static_assert(
+			detail::is_combinator_v<First>,
+			"Sequencing combinator requires a combinator wrapper as argument!"
+		);
+
 		if constexpr (sizeof...(Rest) == 0) {
 			// Only one entry, return that
 			return First()(it);
@@ -399,6 +415,11 @@ private:
 	 */
 	template <typename ResultData, typename First, typename... Rest>
 	static constexpr auto cmb_alt_fn(TokenIterator it) {
+		static_assert(
+			detail::is_combinator_v<First>,
+			"Alternative combinator requires a combinator wrapper as argument!"
+		);
+
 		if constexpr (sizeof...(Rest) == 0) {
 			// Just this one entry is left
 			return First()(it);
@@ -417,6 +438,11 @@ private:
 	 */
 	template <template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep_fn(TokenIterator it) {
+		static_assert(
+			detail::is_combinator_v<Combinator>,
+			"Repeat combinator requires a combinator wrapper as argument!"
+		);
+
 		using element_type = typename Combinator::data_type;
 		Collection<element_type> result;
 		auto out_it = std::back_inserter(result);
@@ -455,6 +481,15 @@ private:
 	 */
 	template <typename Combinator, typename Mapper>
 	static constexpr auto cmb_map_fn(TokenIterator it) {
+		static_assert(
+			detail::is_combinator_v<Combinator>,
+			"Map combinator requires a combinator wrapper as argument!"
+		);
+		static_assert(
+			!detail::is_function_ptr_v<std::decay_t<Mapper>>,
+			"Map does not accpet raw function pointers as transformations!"
+		);
+
 		using combinator_result = decltype(Combinator()(it));
 		using transform_result = decltype(std::apply(
 			Mapper(),
@@ -557,13 +592,19 @@ template <typename TokenIterator>
 struct combinator_values : private detail::maybe_ctors {
 	using types = combinator_types<TokenIterator>;
 
+	template <typename... Data>
+	using result_type = typename types::template result_type<Data...>;
+
 	template <typename T>
 	using maybe = typename types::template maybe<T>;
 
 	using detail::maybe_ctors::make_maybe;
 
-	template <typename... Data>
-	using result_type = typename types::template result_type<Data...>;
+	template <auto Fn>
+	static constexpr auto cmb = typename types::template cmb<Fn>();
+
+	template <auto Fn>
+	static constexpr auto fn = typename types::template fn<Fn>();
 
 	static constexpr auto succ = typename types::succ();
 
@@ -605,12 +646,6 @@ struct combinator_values : private detail::maybe_ctors {
 		return typename types::template map<std::decay_t<Combinator>,
 			std::decay_t<Mapper>>();
 	}
-
-	template <auto Fn>
-	static constexpr auto cmb = typename types::template cmb<Fn>();
-
-	template <auto Fn>
-	static constexpr auto fn = typename types::template fn<Fn>();
 
 	template <typename Predicate>
 	static constexpr auto filter(Predicate&&) {
