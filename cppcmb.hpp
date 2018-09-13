@@ -20,7 +20,7 @@
 namespace cppcmb {
 
 /**
- * Here are the combinator implementations and other type trait utilities.
+ * Utilities and types used by the combinators.
  */
 namespace detail {
 	/**
@@ -120,7 +120,8 @@ namespace detail {
 	template <typename TFwd>
 	constexpr auto unwrap_tuple(TFwd&& arg) {
 		return unwrap_tuple_impl<std::decay_t<TFwd>>::pass(
-			std::forward<TFwd>(arg));
+			std::forward<TFwd>(arg)
+		);
 	}
 
 	/**
