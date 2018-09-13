@@ -120,21 +120,6 @@ namespace detail {
 	}
 
 	/**
-	 * General result type.
-	 */
-	template <typename TokenIterator, typename... Data>
-	using result_type = std::optional<std::pair<
-		decltype(unwrap_tuple(std::declval<std::tuple<Data...>>())),
-		TokenIterator
-	>>;
-
-	/**
-	 * We need to forward-declare functionality for the subscript operator.
-	 */
-	template <typename Combinator, typename Mapper>
-	constexpr auto make_subscript_map(Combinator&&, Mapper&&);
-
-	/**
 	 * Wraps a free function into a functor type so we can pass it around as a
 	 * type. Every non-combinator function (like transformations) has to be
 	 * wrapped in this.
@@ -148,6 +133,12 @@ namespace detail {
 			return Callable(std::forward<Ts>(args)...);
 		}
 	};
+
+	/**
+	 * We need to forward-declare functionality for the subscript operator.
+	 */
+	template <typename Combinator, typename Mapper>
+	constexpr auto make_subscript_map(Combinator&&, Mapper&&);
 
 	/**
 	 * Wraps a free function to act as a combinator function. Every combinator
@@ -185,6 +176,15 @@ namespace detail {
 			return make_subscript_map(*this, std::forward<Mapper>(m));
 		}
 	};
+
+	/**
+	 * General result type.
+	 */
+	template <typename TokenIterator, typename... Data>
+	using result_type = std::optional<std::pair<
+		decltype(unwrap_tuple(std::declval<std::tuple<Data...>>())),
+		TokenIterator
+	>>;
 
 	/**
 	 * Creates a result value.
