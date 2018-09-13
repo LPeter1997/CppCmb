@@ -198,180 +198,6 @@ namespace detail {
 	}
 
 	/**
-	 * The simplest combinator that succeeds with an empty result.
-	 */
-	template <typename TokenIterator>
-	static constexpr auto cmb_succ_fn(TokenIterator it) {
-		return make_result(std::make_tuple(), it);
-	}
-
-	template <typename TokenIterator>
-	using cmb_succ = cmb_wrap<TokenIterator, cmb_succ_fn<TokenIterator>>;
-
-	/**
-	 * A combinator that always fails with a given data type.
-	 */
-	template <typename TokenIterator, typename T>
-	static constexpr auto cmb_fail_fn(TokenIterator) {
-		return result_type<TokenIterator, T>();
-	}
-
-	template <typename TokenIterator, typename T>
-	using cmb_fail = cmb_wrap<TokenIterator, cmb_fail_fn<TokenIterator, T>>;
-
-	/**
-	 * A combinator that returns the current token and advances the position by
-	 * one.
-	 */
-	template <typename TokenIterator>
-	static constexpr auto cmb_one_fn(TokenIterator it) {
-		return make_result(*it, std::next(it));
-	}
-
-	template <typename TokenIterator>
-	using cmb_one = cmb_wrap<TokenIterator, cmb_one_fn<TokenIterator>>;
-
-	/**
-	 * Wraps another combinator so that it's return data becomes optional. This
-	 * combinator therefore always succeeds.
-	 */
-	template <typename TokenIterator, typename Combinator>
-	static constexpr auto cmb_opt_fn(TokenIterator it) {
-		auto res = Combinator()(it);
-		if (!res) {
-			// We didn't advance position
-			using data_type = typename Combinator::data_type;
-			return make_result(std::optional<data_type>(), it);
-		}
-		return make_result(std::make_optional(res->first), res->second);
-	}
-
-	template <typename TokenIterator, typename Combinator>
-	using cmb_opt = cmb_wrap<
-		TokenIterator, cmb_opt_fn<TokenIterator, Combinator>
-	>;
-
-	/**
-	 * Applies combinators in a sequence and concatenates the results if all of
-	 * them succeeds. If one fails, the whole sequence fails.
-	 */
-	template <typename TokenIterator>
-	static constexpr auto cmb_seq_fn(TokenIterator it) {
-		// End of sequence, just succeed
-		return make_result(std::make_tuple(), it);
-	}
-
-	template <typename TokenIterator, typename First, typename... Rest>
-	static constexpr auto cmb_seq_fn(TokenIterator it) {
-		auto first = First()(it);
-		using result_type = decltype(make_result(
-			unwrap_tuple(std::tuple_cat(
-				as_tuple(first->first),
-				as_tuple(cmb_seq_fn<TokenIterator, Rest...>(it)->first)
-			)),
-			it
-		));
-		if (!first) {
-			return result_type();
-		}
-		auto rest = cmb_seq_fn<TokenIterator, Rest...>(first->second);
-		if (!rest) {
-			return result_type();
-		}
-		return make_result(
-			unwrap_tuple(std::tuple_cat(
-				as_tuple(std::move(first->first)),
-				as_tuple(std::move(rest->first))
-			)),
-			rest->second
-		);
-	}
-
-	template <typename TokenIterator, typename... Combinators>
-	using cmb_seq = cmb_wrap<
-		TokenIterator, cmb_seq_fn<TokenIterator, Combinators...>
-	>;
-
-	/**
-	 * Applies the combinators and returns with the first succeeding one. If
-	 * none of them succeeds, the combinator fails.
-	 */
-	template <typename TokenIterator, typename ResultData>
-	static constexpr auto cmb_alt_fn(TokenIterator) {
-		// End of alternatives, fail
-		return std::optional<std::pair<ResultData, TokenIterator>>();
-	}
-
-	template <typename TokenIterator, typename ResultData,
-		typename First, typename... Rest>
-	static constexpr auto cmb_alt_fn(TokenIterator it) {
-		if (auto first = First()(it)) {
-			return first;
-		}
-		return cmb_alt_fn<TokenIterator, ResultData, Rest...>(it);
-	}
-
-	template <typename TokenIterator, typename First, typename... Rest>
-	using cmb_alt = cmb_wrap<
-		TokenIterator,
-		cmb_alt_fn<
-			TokenIterator,
-			typename First::data_type,
-			First, Rest...
-		>
-	>;
-
-	/**
-	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
-	 * Collects result into a collection. Always succeeds.
-	 */
-	template <typename TokenIterator,
-		template <typename...> typename Collection, typename Combinator>
-	static constexpr auto cmb_rep_fn(TokenIterator it) {
-		using element_type = typename Combinator::data_type;
-		Collection<element_type> result;
-		auto out_it = std::back_inserter(result);
-		while (true) {
-			auto res = Combinator()(it);
-			if (!res) {
-				return make_result(std::move(result), it);
-			}
-			// Advance
-			*out_it++ = std::move(res->first);
-			it = res->second;
-		}
-	}
-
-	template <typename TokenIterator,
-		template <typename...> typename Collection, typename Combinator>
-	using cmb_rep = cmb_wrap<
-		TokenIterator, cmb_rep_fn<TokenIterator, Collection, Combinator>
-	>;
-
-	/**
-	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
-	 * Collects result into a collection. Succeeds if it collected at least one
-	 * element.
-	 */
-	template <typename TokenIterator,
-		template <typename...> typename Collection, typename Combinator>
-	static constexpr auto cmb_rep1_fn(TokenIterator it) {
-		auto res = cmb_rep_fn<TokenIterator, Collection, Combinator>(it);
-		using res_type = decltype(res);
-		if (res->first.empty()) {
-			// Empty, fail
-			return res_type();
-		}
-		return res;
-	}
-
-	template <typename TokenIterator,
-		template <typename...> typename Collection, typename Combinator>
-	using cmb_rep1 = cmb_wrap<
-		TokenIterator, cmb_rep1_fn<TokenIterator, Collection, Combinator>
-	>;
-
-	/**
 	 * A wrapper for the map combinator to detect transformations that can fail.
 	 */
 	template <typename RetTy,
@@ -420,28 +246,6 @@ namespace detail {
 			return result_type();
 		}
 	};
-
-	/**
-	 * Applies a combinator. If it succeeded, the result data is applied to a
-	 * transformation function. If the transformation can fail, then it's also
-	 * considered when returning (on transformation failure the combinator
-	 * fails).
-	 */
-	template <typename TokenIterator, typename Combinator, typename Mapper>
-	static constexpr auto cmb_map_fn(TokenIterator it) {
-		using combinator_result = decltype(Combinator()(it));
-		using transform_result = decltype(std::apply(
-			Mapper(),
-			as_tuple(std::declval<combinator_result>()->first)
-		));
-		return cmb_map_impl<std::decay_t<transform_result>,
-			TokenIterator, Combinator, Mapper>::pass(it);
-	}
-
-	template <typename TokenIterator, typename Combinator, typename Mapper>
-	using cmb_map = cmb_wrap<
-		TokenIterator, cmb_map_fn<TokenIterator, Combinator, Mapper>
-	>;
 
 	/**
 	 * Filters the result. If the predicate is true, it succeeds, fails
@@ -544,6 +348,158 @@ namespace detail {
  */
 template <typename TokenIterator>
 struct combinator_types {
+private:
+	/**
+	 * The simplest combinator that succeeds with an empty result.
+	 */
+	static constexpr auto cmb_succ_fn(TokenIterator it) {
+		return detail::make_result(std::make_tuple(), it);
+	}
+
+	/**
+	 * A combinator that always fails with a given data type.
+	 */
+	template <typename T>
+	static constexpr auto cmb_fail_fn(TokenIterator) {
+		return result_type<TokenIterator, T>();
+	}
+
+	/**
+	 * A combinator that returns the current token and advances the position by
+	 * one.
+	 */
+	static constexpr auto cmb_one_fn(TokenIterator it) {
+		return detail::make_result(*it, std::next(it));
+	}
+
+	/**
+	 * Wraps another combinator so that it's return data becomes optional. This
+	 * combinator therefore always succeeds.
+	 */
+	template <typename Combinator>
+	static constexpr auto cmb_opt_fn(TokenIterator it) {
+		static_assert(
+			detail::is_combinator_v<Combinator>,
+			"Optional combinator requires a combinator wrapper as argument!"
+		);
+
+		if (auto res = Combinator()(it)) {
+			return detail::make_result(
+				std::make_optional(res->first), res->second
+			);
+		}
+		using data_type = typename Combinator::data_type;
+		return detail::make_result(std::optional<data_type>(), it);
+	}
+
+	/**
+	 * Applies combinators in a sequence and concatenates the results if all of
+	 * them succeeds. If one fails, the whole sequence fails.
+	 */
+	template <typename First, typename... Rest>
+	static constexpr auto cmb_seq_fn(TokenIterator it) {
+		if constexpr (sizeof...(Rest) == 0) {
+			// Only one entry, return that
+			return First()(it);
+		}
+		else {
+			auto first = First()(it);
+			using result_type = decltype(detail::make_result(
+				detail::unwrap_tuple(std::tuple_cat(
+					detail::as_tuple(first->first),
+					detail::as_tuple(cmb_seq_fn<Rest...>(it)->first)
+				)),
+				it
+			));
+			if (!first) {
+				return result_type();
+			}
+			auto rest = cmb_seq_fn<Rest...>(first->second);
+			if (!rest) {
+				return result_type();
+			}
+			return detail::make_result(
+				detail::unwrap_tuple(std::tuple_cat(
+					detail::as_tuple(std::move(first->first)),
+					detail::as_tuple(std::move(rest->first))
+				)),
+				rest->second
+			);
+		}
+	}
+
+	/**
+	 * Applies the combinators and returns with the first succeeding one. If
+	 * none of them succeeds, the combinator fails.
+	 */
+	template <typename ResultData, typename First, typename... Rest>
+	static constexpr auto cmb_alt_fn(TokenIterator it) {
+		if constexpr (sizeof...(Rest) == 0) {
+			// Just this one entry is left
+			return First()(it);
+		}
+		else {
+			if (auto first = First()(it)) {
+				return first;
+			}
+			return cmb_alt_fn<ResultData, Rest...>(it);
+		}
+	}
+
+	/**
+	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
+	 * Collects result into a collection. Always succeeds.
+	 */
+	template <template <typename...> typename Collection, typename Combinator>
+	static constexpr auto cmb_rep_fn(TokenIterator it) {
+		using element_type = typename Combinator::data_type;
+		Collection<element_type> result;
+		auto out_it = std::back_inserter(result);
+		while (true) {
+			auto res = Combinator()(it);
+			if (!res) {
+				return detail::make_result(std::move(result), it);
+			}
+			// Advance
+			*out_it++ = std::move(res->first);
+			it = res->second;
+		}
+	}
+
+	/**
+	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
+	 * Collects result into a collection. Succeeds if it collected at least one
+	 * element.
+	 */
+	template <template <typename...> typename Collection, typename Combinator>
+	static constexpr auto cmb_rep1_fn(TokenIterator it) {
+		auto res = cmb_rep_fn<Collection, Combinator>(it);
+		using res_type = decltype(res);
+		if (res->first.empty()) {
+			// Empty, fail
+			return res_type();
+		}
+		return res;
+	}
+
+	/**
+	 * Applies a combinator. If it succeeded, the result data is applied to a
+	 * transformation function. If the transformation can fail, then it's also
+	 * considered when returning (on transformation failure the combinator
+	 * fails).
+	 */
+	template <typename Combinator, typename Mapper>
+	static constexpr auto cmb_map_fn(TokenIterator it) {
+		using combinator_result = decltype(Combinator()(it));
+		using transform_result = decltype(std::apply(
+			Mapper(),
+			detail::as_tuple(std::declval<combinator_result>()->first)
+		));
+		return detail::cmb_map_impl<std::decay_t<transform_result>,
+			TokenIterator, Combinator, Mapper>::pass(it);
+	}
+
+public:
 	template <typename T>
 	using maybe = detail::maybe<T>;
 
@@ -562,39 +518,39 @@ struct combinator_types {
 		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
 	}
 
+	template <auto Fn>
+	using fn = detail::fn_wrap<Fn>;
+
 	template <typename... Data>
 	using result_type = detail::result_type<TokenIterator, Data...>;
-
-	using succ = detail::cmb_succ<TokenIterator>;
-
-	template <typename T>
-	using fail = detail::cmb_fail<TokenIterator, T>;
-
-	using one = detail::cmb_one<TokenIterator>;
-
-	template <typename Combinator>
-	using opt = detail::cmb_opt<TokenIterator, Combinator>;
-
-	template <typename... Combinators>
-	using seq = detail::cmb_seq<TokenIterator, Combinators...>;
-
-	template <typename First, typename... Rest>
-	using alt = detail::cmb_alt<TokenIterator, First, Rest...>;
-
-	template <template <typename...> typename Collection, typename Combinator>
-	using rep = detail::cmb_rep<TokenIterator, Collection, Combinator>;
-
-	template <template <typename...> typename Collection, typename Combinator>
-	using rep1 = detail::cmb_rep1<TokenIterator, Collection, Combinator>;
-
-	template <typename Combinator, typename Mapper>
-	using map = detail::cmb_map<TokenIterator, Combinator, Mapper>;
 
 	template <auto Fn>
 	using cmb = detail::cmb_wrap<TokenIterator, Fn>;
 
-	template <auto Fn>
-	using fn = detail::fn_wrap<Fn>;
+	using succ = cmb<cmb_succ_fn>;
+
+	template <typename T>
+	using fail = cmb<cmb_fail_fn<T>>;
+
+	using one = cmb<cmb_one_fn>;
+
+	template <typename Combinator>
+	using opt = cmb<cmb_opt_fn<Combinator>>;
+
+	template <typename First, typename... Rest>
+	using seq = cmb<cmb_seq_fn<First, Rest...>>;
+
+	template <typename First, typename... Rest>
+	using alt = cmb<cmb_alt_fn<typename First::data_type, First, Rest...>>;
+
+	template <template <typename...> typename Collection, typename Combinator>
+	using rep = cmb<cmb_rep_fn<Collection, Combinator>>;
+
+	template <template <typename...> typename Collection, typename Combinator>
+	using rep1 = cmb<cmb_rep1_fn<Collection, Combinator>>;
+
+	template <typename Combinator, typename Mapper>
+	using map = cmb<cmb_map_fn<Combinator, Mapper>>;
 
 	template <typename Predicate>
 	using filter = detail::filter_impl<Predicate>;
