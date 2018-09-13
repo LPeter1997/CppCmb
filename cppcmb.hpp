@@ -52,22 +52,26 @@ namespace detail {
 	};
 
 	/**
-	 * Helper function to make the failable type.
+	 * Helper functions to make the failable type. Wrapped in a struct so it can
+	 * be inherited without duplication.
 	 */
-	template <typename T>
-	constexpr auto make_maybe(T&& val) {
-		return maybe<std::decay_t<T>>(std::forward<T>(val));
-	}
+	struct maybe_ctors {
+		template <typename T>
+		static constexpr auto make_maybe(T&& val) {
+			return maybe<std::decay_t<T>>(std::forward<T>(val));
+		}
 
-	template <typename T, typename... Args>
-	constexpr auto make_maybe(Args&&... args) {
-		return maybe<T>(std::in_place, std::forward<Args>(args)...);
-	}
+		template <typename T, typename... Args>
+		static constexpr auto make_maybe(Args&&... args) {
+			return maybe<T>(std::in_place, std::forward<Args>(args)...);
+		}
 
-	template <typename T, typename U, typename... Args>
-	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
-		return maybe<T>(std::in_place, il, std::forward<Args>(args)...);
-	}
+		template <typename T, typename U, typename... Args>
+		static constexpr auto
+		make_maybe(std::initializer_list<U> il, Args&&... args) {
+			return maybe<T>(std::in_place, il, std::forward<Args>(args)...);
+		}
+	};
 
 	/**
 	 * A helper functionality that wraps any value into a tuple if it's not
@@ -187,11 +191,11 @@ namespace detail {
 
 		template <typename... Ts>
 		constexpr auto operator()(Ts&&... args) const {
-			using res_type = decltype(make_maybe(
+			using res_type = decltype(maybe_ctors::make_maybe(
 				unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
 			));
 			if (Predicate()(args...)) {
-				return make_maybe(
+				return maybe_ctors::make_maybe(
 					unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
 				);
 			}
@@ -289,7 +293,7 @@ namespace detail {
  * A module interface for a template-style grammar definition.
  */
 template <typename TokenIterator>
-struct combinator_types {
+struct combinator_types : private detail::maybe_ctors {
 public:
 	/**
 	 * General result type.
@@ -458,13 +462,6 @@ private:
 		));
 		if constexpr (detail::is_maybe_v<transform_result>) {
 			auto res = Combinator()(it);
-			// XXX(LPeter1997): Simplify?
-			using result_type = decltype(make_result(
-				detail::unwrap_tuple(
-					*std::apply(Mapper(), detail::as_tuple(res->first))
-				),
-				it
-			));
 			if (res) {
 				auto transformed = std::apply(
 					Mapper(), detail::as_tuple(res->first)
@@ -476,6 +473,13 @@ private:
 					);
 				}
 			}
+			// XXX(LPeter1997): Simplify?
+			using result_type = decltype(make_result(
+				detail::unwrap_tuple(
+					*std::apply(Mapper(), detail::as_tuple(res->first))
+				),
+				it
+			));
 			return result_type();
 		}
 		else {
@@ -503,20 +507,7 @@ public:
 	template <typename T>
 	using maybe = detail::maybe<T>;
 
-	template <typename T>
-	constexpr auto make_maybe(T&& val) {
-		return detail::make_maybe(std::forward<T>(val));
-	}
-
-	template <typename T, typename... Args>
-	constexpr auto make_maybe(Args&&... args) {
-		return detail::make_maybe<T>(std::forward<Args>(args)...);
-	}
-
-	template <typename T, typename U, typename... Args>
-	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
-		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
-	}
+	using detail::maybe_ctors::make_maybe;
 
 	template <auto Fn>
 	using fn = detail::fn_wrap<Fn>;
@@ -563,26 +554,13 @@ public:
 };
 
 template <typename TokenIterator>
-struct combinator_values {
+struct combinator_values : private detail::maybe_ctors {
 	using types = combinator_types<TokenIterator>;
 
 	template <typename T>
 	using maybe = typename types::template maybe<T>;
 
-	template <typename T>
-	constexpr auto make_maybe(T&& val) {
-		return detail::make_maybe(std::forward<T>(val));
-	}
-
-	template <typename T, typename... Args>
-	constexpr auto make_maybe(Args&&... args) {
-		return detail::make_maybe<T>(std::forward<Args>(args)...);
-	}
-
-	template <typename T, typename U, typename... Args>
-	constexpr auto make_maybe(std::initializer_list<U> il, Args&&... args) {
-		return detail::make_maybe<T>(il, std::forward<Args>(args)...);
-	}
+	using detail::maybe_ctors::make_maybe;
 
 	template <typename... Data>
 	using result_type = typename types::template result_type<Data...>;
