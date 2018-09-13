@@ -178,76 +178,6 @@ namespace detail {
 	};
 
 	/**
-	 * General result type.
-	 */
-	template <typename TokenIterator, typename... Data>
-	using result_type = std::optional<std::pair<
-		decltype(unwrap_tuple(std::declval<std::tuple<Data...>>())),
-		TokenIterator
-	>>;
-
-	/**
-	 * Creates a result value.
-	 * Result values are in the form of ((data...), position)?.
-	 */
-	template <typename Data, typename TokenIterator>
-	constexpr auto make_result(Data&& data, TokenIterator it) {
-		return std::make_optional(std::make_pair(
-			std::forward<Data>(data), it
-		));
-	}
-
-	/**
-	 * A wrapper for the map combinator to detect transformations that can fail.
-	 */
-	template <typename RetTy,
-		typename TokenIterator, typename Combinator, typename Mapper>
-	struct cmb_map_impl {
-		constexpr cmb_map_impl() = default;
-
-		static constexpr auto pass(TokenIterator it) {
-			auto res = Combinator()(it);
-			if (res) {
-				return make_result(
-					unwrap_tuple(std::apply(Mapper(), as_tuple(res->first))),
-					res->second
-				);
-			}
-			// XXX(LPeter1997): Simplify?
-			using result_type = decltype(make_result(
-				unwrap_tuple(std::apply(Mapper(), as_tuple(res->first))),
-				it
-			));
-			return result_type();
-		}
-	};
-
-	template <typename TokenIterator, typename Combinator, typename Mapper,
-		typename T>
-	struct cmb_map_impl<maybe<T>, TokenIterator, Combinator, Mapper> {
-		constexpr cmb_map_impl() = default;
-
-		static constexpr auto pass(TokenIterator it) {
-			auto res = Combinator()(it);
-			// XXX(LPeter1997): Simplify?
-			using result_type = decltype(make_result(
-				unwrap_tuple(*std::apply(Mapper(), as_tuple(res->first))),
-				it
-			));
-			if (res) {
-				auto transformed = std::apply(Mapper(), as_tuple(res->first));
-				if (transformed) {
-					return make_result(
-						unwrap_tuple(std::move(*transformed)),
-						res->second
-					);
-				}
-			}
-			return result_type();
-		}
-	};
-
-	/**
 	 * Filters the result. If the predicate is true, it succeeds, fails
 	 * otherwise.
 	 */
@@ -319,6 +249,18 @@ namespace detail {
 	};
 
 	/**
+	 * Mechanism for matching maybes. Mapping combinator needs it.
+	 */
+	template <typename T>
+	struct is_maybe : std::false_type {};
+
+	template <typename T>
+	struct is_maybe<maybe<T>> : std::true_type {};
+
+	template <typename T>
+	inline constexpr bool is_maybe_v = is_maybe<T>::value;
+
+	/**
 	 * Mechanism for matching combinators. This is the reason we need all
 	 * combinators as cmb_wrap-s.
 	 */
@@ -329,7 +271,7 @@ namespace detail {
 	struct is_combinator<cmb_wrap<TokenIterator, Callable>> : std::true_type {};
 
 	template <typename T>
-	static constexpr bool is_combinator_v = is_combinator<T>::value;
+	inline constexpr bool is_combinator_v = is_combinator<T>::value;
 
 	/**
 	 * SFINAE test for combinators.
@@ -348,12 +290,33 @@ namespace detail {
  */
 template <typename TokenIterator>
 struct combinator_types {
+public:
+	/**
+	 * General result type.
+	 */
+	template <typename... Data>
+	using result_type = std::optional<std::pair<
+		decltype(detail::unwrap_tuple(std::declval<std::tuple<Data...>>())),
+		TokenIterator
+	>>;
+
+	/**
+	 * Creates a result value.
+	 * Result values are in the form of ((data...), position)?.
+	 */
+	template <typename Data>
+	static constexpr auto make_result(Data&& data, TokenIterator it) {
+		return std::make_optional(std::make_pair(
+			std::forward<Data>(data), it
+		));
+	}
+
 private:
 	/**
 	 * The simplest combinator that succeeds with an empty result.
 	 */
 	static constexpr auto cmb_succ_fn(TokenIterator it) {
-		return detail::make_result(std::make_tuple(), it);
+		return make_result(std::make_tuple(), it);
 	}
 
 	/**
@@ -361,7 +324,7 @@ private:
 	 */
 	template <typename T>
 	static constexpr auto cmb_fail_fn(TokenIterator) {
-		return result_type<TokenIterator, T>();
+		return result_type<T>();
 	}
 
 	/**
@@ -369,7 +332,7 @@ private:
 	 * one.
 	 */
 	static constexpr auto cmb_one_fn(TokenIterator it) {
-		return detail::make_result(*it, std::next(it));
+		return make_result(*it, std::next(it));
 	}
 
 	/**
@@ -384,12 +347,10 @@ private:
 		);
 
 		if (auto res = Combinator()(it)) {
-			return detail::make_result(
-				std::make_optional(res->first), res->second
-			);
+			return make_result(std::make_optional(res->first), res->second);
 		}
 		using data_type = typename Combinator::data_type;
-		return detail::make_result(std::optional<data_type>(), it);
+		return make_result(std::optional<data_type>(), it);
 	}
 
 	/**
@@ -404,7 +365,7 @@ private:
 		}
 		else {
 			auto first = First()(it);
-			using result_type = decltype(detail::make_result(
+			using result_type = decltype(make_result(
 				detail::unwrap_tuple(std::tuple_cat(
 					detail::as_tuple(first->first),
 					detail::as_tuple(cmb_seq_fn<Rest...>(it)->first)
@@ -418,7 +379,7 @@ private:
 			if (!rest) {
 				return result_type();
 			}
-			return detail::make_result(
+			return make_result(
 				detail::unwrap_tuple(std::tuple_cat(
 					detail::as_tuple(std::move(first->first)),
 					detail::as_tuple(std::move(rest->first))
@@ -458,7 +419,7 @@ private:
 		while (true) {
 			auto res = Combinator()(it);
 			if (!res) {
-				return detail::make_result(std::move(result), it);
+				return make_result(std::move(result), it);
 			}
 			// Advance
 			*out_it++ = std::move(res->first);
@@ -495,8 +456,47 @@ private:
 			Mapper(),
 			detail::as_tuple(std::declval<combinator_result>()->first)
 		));
-		return detail::cmb_map_impl<std::decay_t<transform_result>,
-			TokenIterator, Combinator, Mapper>::pass(it);
+		if constexpr (detail::is_maybe_v<transform_result>) {
+			auto res = Combinator()(it);
+			// XXX(LPeter1997): Simplify?
+			using result_type = decltype(make_result(
+				detail::unwrap_tuple(
+					*std::apply(Mapper(), detail::as_tuple(res->first))
+				),
+				it
+			));
+			if (res) {
+				auto transformed = std::apply(
+					Mapper(), detail::as_tuple(res->first)
+				);
+				if (transformed) {
+					return make_result(
+						detail::unwrap_tuple(std::move(*transformed)),
+						res->second
+					);
+				}
+			}
+			return result_type();
+		}
+		else {
+			auto res = Combinator()(it);
+			if (res) {
+				return make_result(
+					detail::unwrap_tuple(
+						std::apply(Mapper(), detail::as_tuple(res->first))
+					),
+					res->second
+				);
+			}
+			// XXX(LPeter1997): Simplify?
+			using result_type = decltype(make_result(
+				detail::unwrap_tuple(
+					std::apply(Mapper(), detail::as_tuple(res->first))
+				),
+				it
+			));
+			return result_type();
+		}
 	}
 
 public:
@@ -520,9 +520,6 @@ public:
 
 	template <auto Fn>
 	using fn = detail::fn_wrap<Fn>;
-
-	template <typename... Data>
-	using result_type = detail::result_type<TokenIterator, Data...>;
 
 	template <auto Fn>
 	using cmb = detail::cmb_wrap<TokenIterator, Fn>;
