@@ -270,24 +270,24 @@ namespace detail {
 	 * combinators as cmb_wrap-s.
 	 */
 	template <typename T>
-	struct is_combinator : std::false_type {};
+	struct is_cmb : std::false_type {};
 
 	template <typename TokenIterator, auto Callable>
-	struct is_combinator<cmb_wrap<TokenIterator, Callable>> : std::true_type {};
+	struct is_cmb<cmb_wrap<TokenIterator, Callable>> : std::true_type {};
 
 	template <typename T>
-	inline constexpr bool is_combinator_v = is_combinator<T>::value;
+	inline constexpr bool is_cmb_v = is_cmb<T>::value;
 
 	/**
 	 * SFINAE test for combinators.
 	 */
 	template <typename T>
-	struct enable_if_combinator : public std::enable_if<
-		is_combinator_v<std::decay_t<T>>
+	struct enable_if_cmb : public std::enable_if<
+		is_cmb_v<std::decay_t<T>>
 	> {};
 
 	template <typename T>
-	using enable_if_combinator_t = typename enable_if_combinator<T>::type;
+	using enable_if_cmb_t = typename enable_if_cmb<T>::type;
 
 	/**
 	 * Check if a type is a function pointer.
@@ -358,7 +358,7 @@ private:
 	template <typename Combinator>
 	static constexpr auto cmb_opt_fn(TokenIterator it) {
 		static_assert(
-			detail::is_combinator_v<Combinator>,
+			detail::is_cmb_v<Combinator>,
 			"Optional combinator requires a combinator wrapper as argument!"
 		);
 
@@ -376,7 +376,7 @@ private:
 	template <typename First, typename... Rest>
 	static constexpr auto cmb_seq_fn(TokenIterator it) {
 		static_assert(
-			detail::is_combinator_v<First>,
+			detail::is_cmb_v<First>,
 			"Sequencing combinator requires a combinator wrapper as argument!"
 		);
 
@@ -417,7 +417,7 @@ private:
 	template <typename ResultData, typename First, typename... Rest>
 	static constexpr auto cmb_alt_fn(TokenIterator it) {
 		static_assert(
-			detail::is_combinator_v<First>,
+			detail::is_cmb_v<First>,
 			"Alternative combinator requires a combinator wrapper as argument!"
 		);
 
@@ -440,7 +440,7 @@ private:
 	template <template <typename...> typename Collection, typename Combinator>
 	static constexpr auto cmb_rep_fn(TokenIterator it) {
 		static_assert(
-			detail::is_combinator_v<Combinator>,
+			detail::is_cmb_v<Combinator>,
 			"Repeat combinator requires a combinator wrapper as argument!"
 		);
 
@@ -483,7 +483,7 @@ private:
 	template <typename Combinator, typename Mapper>
 	static constexpr auto cmb_map_fn(TokenIterator it) {
 		static_assert(
-			detail::is_combinator_v<Combinator>,
+			detail::is_cmb_v<Combinator>,
 			"Map combinator requires a combinator wrapper as argument!"
 		);
 		static_assert(
@@ -692,7 +692,7 @@ namespace detail {
  * Optional.
  */
 template <typename Combinator,
-	typename = cppcmb::detail::enable_if_combinator_t<Combinator>>
+	typename = cppcmb::detail::enable_if_cmb_t<Combinator>>
 constexpr auto operator~(Combinator&& c) {
 	using combinator_t = std::decay_t<Combinator>;
 
@@ -707,8 +707,8 @@ constexpr auto operator~(Combinator&& c) {
  * Sequencing.
  */
 template <typename Left, typename Right,
-	typename = cppcmb::detail::enable_if_combinator_t<Left>,
-	typename = cppcmb::detail::enable_if_combinator_t<Right>>
+	typename = cppcmb::detail::enable_if_cmb_t<Left>,
+	typename = cppcmb::detail::enable_if_cmb_t<Right>>
 constexpr auto operator&(Left&& l, Right&& r) {
 	using left_t = std::decay_t<Left>;
 	using right_t = std::decay_t<Right>;
@@ -728,8 +728,8 @@ constexpr auto operator&(Left&& l, Right&& r) {
  * Alternatives.
  */
 template <typename Left, typename Right,
-	typename = cppcmb::detail::enable_if_combinator_t<Left>,
-	typename = cppcmb::detail::enable_if_combinator_t<Right>>
+	typename = cppcmb::detail::enable_if_cmb_t<Left>,
+	typename = cppcmb::detail::enable_if_cmb_t<Right>>
 constexpr auto operator|(Left&& l, Right&& r) {
 	using left_t = std::decay_t<Left>;
 	using right_t = std::decay_t<Right>;
