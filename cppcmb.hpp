@@ -422,11 +422,8 @@ private:
 		}
 		else {
 			using first_type = typename First::data_type;
-			using result_type = decltype(make_result(
-				detail::concat(
-					std::declval<first_type>(),
-					cmb_seq_fn<Rest...>(it)->first),
-					it
+			using data_type = decltype(detail::concat(
+					std::declval<first_type>(), cmb_seq_fn<Rest...>(it)->first
 			));
 			if (auto first = First()(it)) {
 				if (auto rest = cmb_seq_fn<Rest...>(first->second)) {
@@ -438,7 +435,7 @@ private:
 					);
 				}
 			}
-			return result_type();
+			return fail<data_type>()(it);
 		}
 	}
 
@@ -523,18 +520,15 @@ private:
 			"Map does not accpet raw function pointers as transformations!"
 		);
 
-		using combinator_result = decltype(Combinator()(it));
+		using data_type = typename Combinator::data_type;
 		using transform_result = decltype(std::apply(
-			Mapper(),
-			detail::as_tuple(std::declval<combinator_result>()->first)
+			Mapper(), detail::as_tuple(std::declval<data_type>())
 		));
+
 		if constexpr (detail::is_maybe_v<transform_result>) {
-			auto res = Combinator()(it);
-			if (res) {
-				auto transformed = std::apply(
-					Mapper(), detail::as_tuple(res->first)
-				);
-				if (transformed) {
+			if (auto res = Combinator()(it)) {
+				if (auto transformed =
+					std::apply(Mapper(), detail::as_tuple(res->first))) {
 					return make_result(
 						detail::unwrap_tuple(std::move(*transformed)),
 						res->second
@@ -542,17 +536,13 @@ private:
 				}
 			}
 			// XXX(LPeter1997): Simplify?
-			using result_type = decltype(make_result(
-				detail::unwrap_tuple(
-					*std::apply(Mapper(), detail::as_tuple(res->first))
-				),
-				it
-			));
-			return result_type();
+			using result_type = decltype(detail::unwrap_tuple(*std::apply(
+				Mapper(), detail::as_tuple(std::declval<data_type>())
+			)));
+			return fail<result_type>()(it);
 		}
 		else {
-			auto res = Combinator()(it);
-			if (res) {
+			if (auto res = Combinator()(it)) {
 				return make_result(
 					detail::unwrap_tuple(
 						std::apply(Mapper(), detail::as_tuple(res->first))
@@ -561,13 +551,10 @@ private:
 				);
 			}
 			// XXX(LPeter1997): Simplify?
-			using result_type = decltype(make_result(
-				detail::unwrap_tuple(
-					std::apply(Mapper(), detail::as_tuple(res->first))
-				),
-				it
-			));
-			return result_type();
+			using result_type = decltype(detail::unwrap_tuple(std::apply(
+				Mapper(), detail::as_tuple(std::declval<data_type>())
+			)));
+			return fail<result_type>()(it);
 		}
 	}
 
