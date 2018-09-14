@@ -101,6 +101,9 @@ namespace detail {
 	/**
 	 * A helper functionality that unwraps a tuple if it can.
 	 */
+	template <typename TFwd>
+	constexpr auto unwrap_tuple(TFwd&& arg);
+
 	template <typename T>
 	struct unwrap_tuple_impl {
 		template <typename TFwd>
@@ -113,7 +116,7 @@ namespace detail {
 	struct unwrap_tuple_impl<std::tuple<T>> {
 		template <typename TFwd>
 		static constexpr auto pass(TFwd&& arg) {
-			return std::get<0>(std::forward<TFwd>(arg));
+			return unwrap_tuple(std::get<0>(std::forward<TFwd>(arg)));
 		}
 	};
 
