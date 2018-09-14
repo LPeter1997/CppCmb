@@ -421,21 +421,24 @@ private:
 			return First()(it);
 		}
 		else {
-			auto first = First()(it);
+			using first_type = typename First::data_type;
 			using result_type = decltype(make_result(
-				detail::concat(first->first, cmb_seq_fn<Rest...>(it)->first), it
+				detail::concat(
+					std::declval<first_type>(),
+					cmb_seq_fn<Rest...>(it)->first),
+					it
 			));
-			if (!first) {
-				return result_type();
+			if (auto first = First()(it)) {
+				if (auto rest = cmb_seq_fn<Rest...>(first->second)) {
+					return make_result(
+						detail::concat(
+							std::move(first->first), std::move(rest->first)
+						),
+						rest->second
+					);
+				}
 			}
-			auto rest = cmb_seq_fn<Rest...>(first->second);
-			if (!rest) {
-				return result_type();
-			}
-			return make_result(
-				detail::concat(std::move(first->first), std::move(rest->first)),
-				rest->second
-			);
+			return result_type();
 		}
 	}
 
