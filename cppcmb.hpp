@@ -125,6 +125,39 @@ namespace detail {
 	}
 
 	/**
+	 * Identity function.
+	 */
+	template <typename T>
+	constexpr auto identity(T&& arg) {
+		return arg;
+	}
+
+	/**
+	 * A function that constructs a tuple if there are multiple or 0 parameters,
+	 * but returns the parameter itself if there is only one.
+	 */
+	template <typename... Ts>
+	constexpr auto tuple_of(Ts&&... args) {
+		if constexpr (sizeof...(args) == 1) {
+			return identity(std::forward<Ts>(args)...);
+		}
+		else {
+			return std::make_tuple(std::forward<Ts>(args)...);
+		}
+	}
+
+	/**
+	 * Concatenates the arguments into a tuple and unwraps the result if
+	 * possible.
+	 */
+	template <typename... Ts>
+	constexpr auto concat(Ts&&... args) {
+		return unwrap_tuple(
+			std::tuple_cat(as_tuple(std::forward<Ts>(args))...)
+		);
+	}
+
+	/**
 	 * Wraps a free function into a functor type so we can pass it around as a
 	 * type. Every non-combinator function (like transformations) has to be
 	 * wrapped in this.
@@ -193,11 +226,11 @@ namespace detail {
 		template <typename... Ts>
 		constexpr auto operator()(Ts&&... args) const {
 			using res_type = decltype(maybe_ctors::make_maybe(
-				unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
+				tuple_of(std::forward<Ts>(args)...)
 			));
 			if (Predicate()(args...)) {
 				return maybe_ctors::make_maybe(
-					unwrap_tuple(std::make_tuple(std::forward<Ts>(args)...))
+					tuple_of(std::forward<Ts>(args)...)
 				);
 			}
 			return res_type();
@@ -213,9 +246,9 @@ namespace detail {
 
 		template <typename... Ts>
 		constexpr auto operator()(Ts&&... args) const {
-			return unwrap_tuple(std::make_tuple(std::get<Indicies>(
+			return tuple_of(std::get<Indicies>(
 				std::make_tuple(std::forward<Ts>(args)...)
-			)...));
+			)...);
 		}
 	};
 
@@ -312,7 +345,7 @@ public:
 	 */
 	template <typename... Data>
 	using result_type = std::optional<std::pair<
-		decltype(detail::unwrap_tuple(std::declval<std::tuple<Data...>>())),
+		decltype(detail::tuple_of(std::declval<Data>()...)),
 		TokenIterator
 	>>;
 
@@ -387,11 +420,7 @@ private:
 		else {
 			auto first = First()(it);
 			using result_type = decltype(make_result(
-				detail::unwrap_tuple(std::tuple_cat(
-					detail::as_tuple(first->first),
-					detail::as_tuple(cmb_seq_fn<Rest...>(it)->first)
-				)),
-				it
+				detail::concat(first->first, cmb_seq_fn<Rest...>(it)->first), it
 			));
 			if (!first) {
 				return result_type();
@@ -401,10 +430,7 @@ private:
 				return result_type();
 			}
 			return make_result(
-				detail::unwrap_tuple(std::tuple_cat(
-					detail::as_tuple(std::move(first->first)),
-					detail::as_tuple(std::move(rest->first))
-				)),
+				detail::concat(std::move(first->first), std::move(rest->first)),
 				rest->second
 			);
 		}
