@@ -736,8 +736,8 @@ constexpr auto operator&(Left&& l, Right&& r) {
 
 	using iter_type = typename left_t::iterator_type;
 
-	static_assert(std::is_same_v<
-		iter_type, typename right_t::iterator_type>,
+	static_assert(
+		std::is_same_v<iter_type, typename right_t::iterator_type>,
 		"Sequenced iterator types must match!");
 
 	return cppcmb::combinator_values<iter_type>::seq(
@@ -757,8 +757,8 @@ constexpr auto operator|(Left&& l, Right&& r) {
 
 	using iter_type = typename left_t::iterator_type;
 
-	static_assert(std::is_same_v<
-		iter_type, typename right_t::iterator_type>,
+	static_assert(
+		std::is_same_v<iter_type, typename right_t::iterator_type>,
 		"Alternate iterator types must match!");
 
 	return cppcmb::combinator_values<iter_type>::alt(
