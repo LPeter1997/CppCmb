@@ -17,6 +17,8 @@
 #include <type_traits>
 #include <utility>
 
+// XXX(LPeter1997): Make decltype(auto) where appropriate
+
 namespace cppcmb {
 
 /**
