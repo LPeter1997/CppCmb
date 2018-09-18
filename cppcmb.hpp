@@ -221,13 +221,27 @@ namespace detail {
 	};
 
 	/**
+	 * Check if a type is a function pointer.
+	 */
+	template <typename T>
+	struct is_function_ptr : std::bool_constant<
+		std::is_pointer_v<T> && std::is_function_v<std::remove_pointer_t<T>>
+	> { };
+
+	template <typename T>
+	inline constexpr bool is_function_ptr_v = is_function_ptr<T>::value;
+
+	/**
 	 * Filters the result. If the predicate is true, it succeeds, fails
 	 * otherwise.
 	 */
 	template <typename Predicate>
 	struct filter_impl {
-		// XXX(LPeter1997): Assert that Predicate is not a function pointer
-	
+		static_assert(
+			!is_function_ptr_v<Predicate>,
+			"Filter cannot have a function pointer as a predicate!"
+		);
+
 		constexpr filter_impl() = default;
 
 		template <typename... Ts>
@@ -265,8 +279,11 @@ namespace detail {
 	 */
 	template <typename Folder>
 	struct foldl_impl {
-		// XXX(LPeter1997): Assert that Folder is not a function pointer
-	
+		static_assert(
+			!is_function_ptr_v<Folder>,
+			"Fold function cannot have a function pointer as a predicate!"
+		);
+
 		constexpr foldl_impl() = default;
 
 		template <typename Init, typename Rest>
@@ -284,8 +301,11 @@ namespace detail {
 	 */
 	template <typename Folder>
 	struct foldr_impl {
-		// XXX(LPeter1997): Assert that Folder is not a function pointer
-	
+		static_assert(
+			!is_function_ptr_v<Folder>,
+			"Fold function cannot have a function pointer as a predicate!"
+		);
+
 		constexpr foldr_impl() = default;
 
 		template <typename Init, typename Rest>
@@ -332,17 +352,6 @@ namespace detail {
 
 	template <typename T>
 	using enable_if_cmb_t = typename enable_if_cmb<T>::type;
-
-	/**
-	 * Check if a type is a function pointer.
-	 */
-	template <typename T>
-	struct is_function_ptr : std::bool_constant<
-		std::is_pointer_v<T> && std::is_function_v<std::remove_pointer_t<T>>
-	> { };
-
-	template <typename T>
-	inline constexpr bool is_function_ptr_v = is_function_ptr<T>::value;
 } /* namespace detail */
 
 /**
