@@ -509,10 +509,10 @@ public:
 
 	public:
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>>
+		struct cmb<Collection<Ts...>>
 			: call<
 				P<Collection<Ts...>>::success,
 				typename P<Collection<Ts...>>::result,
@@ -536,10 +536,10 @@ public:
 	template <template <typename> typename P1>
 	struct seq<P1> {
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>> : P1<Collection<Ts...>> {};
+		struct cmb<Collection<Ts...>> : P1<Collection<Ts...>> {};
 	};
 
 	/**
@@ -558,7 +558,7 @@ public:
 
 		template <typename Res, typename OldRem, typename NewRem>
 		struct call<false, Res, OldRem, NewRem>
-			: alt<PRest...>::template type<OldRem> {};
+			: alt<PRest...>::template cmb<OldRem> {};
 
 		template <typename Res, typename OldRem, typename NewRem>
 		struct call<true, Res, OldRem, NewRem>
@@ -566,10 +566,10 @@ public:
 
 	public:
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>>
+		struct cmb<Collection<Ts...>>
 			: call<
 				PFirst<Collection<Ts...>>::success,
 				typename PFirst<Collection<Ts...>>::result,
@@ -581,10 +581,10 @@ public:
 	template <template <typename> typename P>
 	struct alt<P> {
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>> : P<Collection<Ts...>> {};
+		struct cmb<Collection<Ts...>> : P<Collection<Ts...>> {};
 	};
 
 	/**
@@ -612,10 +612,10 @@ public:
 
 	public:
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>>
+		struct cmb<Collection<Ts...>>
 			: call<true,
 				Collection<>, Collection<Ts...>,
 				Collection<>, Collection<Ts...>
@@ -630,20 +630,17 @@ public:
 	template <template <typename> typename P>
 	struct rep1 {
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>>
-			: seq<P, rep<P>::template type>::
-			template type<Collection<Ts...>> {};
+		struct cmb<Collection<Ts...>>
+			: seq<P, rep<P>::template cmb>::
+			template cmb<Collection<Ts...>> {};
 	};
 
 	/**
-	 * Types to mark a mapping that could succeed or fail.
+	 * Types to mark a mapping that fails.
 	 */
-	template <typename>
-	struct map_succ {};
-
 	struct map_fail {};
 
 	/**
@@ -659,12 +656,7 @@ public:
 		template <typename Res, typename Rem>
 		struct applied_result : success_result<unwrap_single_t<Res>, Rem> {};
 
-		// Can fail, success
-		template <typename Res, typename Rem>
-		struct applied_result<map_succ<Res>, Rem>
-			: success_result<unwrap_single_t<Res>, Rem> {};
-
-		// Can fail, failed
+		// Fail case
 		template <typename Rem>
 		struct applied_result<map_fail, Rem> : fail_result {};
 
@@ -696,15 +688,53 @@ public:
 
 	public:
 		template <typename>
-		struct type;
+		struct cmb;
 
 		template <typename... Ts>
-		struct type<Collection<Ts...>>
+		struct cmb<Collection<Ts...>>
 			: call<
 				P<Collection<Ts...>>::success,
 				typename P<Collection<Ts...>>::result,
 				typename P<Collection<Ts...>>::remaining
 			> {};
+	};
+
+	/**
+	 * Filters the result. If the predicate is true, it succeeds, fails
+	 * otherwise.
+	 */
+	template <template <typename...> typename Pred>
+	struct filter {
+	private:
+		template <bool, typename...>
+		struct call;
+
+		template <typename... Ts>
+		struct call<true, Ts...> {
+			using type = unwrap_single_t<Collection<Ts...>>;
+		};
+
+		template <typename... Ts>
+		struct call<false, Ts...> {
+			using type = map_fail;
+		};
+
+	public:
+		template <typename... Ts>
+		struct fn : call<Pred<Ts...>::value, Ts...> {};
+	};
+
+	/**
+	 * Selector function that returns some elements of the result.
+	 */
+	template <std::size_t... Indicies>
+	struct select {
+		template <typename... Ts>
+		struct fn {
+			using type = unwrap_single_t<Collection<
+				std::tuple_element_t<Indicies, std::tuple<Ts...>>...
+			>>;
+		};
 	};
 };
 

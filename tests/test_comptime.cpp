@@ -43,13 +43,13 @@ TEST_CASE("Comptime 'one' takes a single element from the current position", "[c
 template <typename T>
 struct match {
 	template <typename>
-	struct type;
+	struct cmb;
 
 	template <typename... Ts>
-	struct type<std::tuple<Ts...>> : ct::fail_result {};
+	struct cmb<std::tuple<Ts...>> : ct::fail_result {};
 
 	template <typename... Ts>
-	struct type<std::tuple<T, Ts...>>
+	struct cmb<std::tuple<T, Ts...>>
 		: ct::success_result<T, std::tuple<Ts...>> {};
 };
 
@@ -57,13 +57,13 @@ TEST_CASE("Comptime 'opt' always succeeds, but does not always consume", "[compt
 	using input = std::tuple<A, B, C>;
 
 	SECTION("on matching the parser advances") {
-		using result = ct::opt<match<A>::type>::type<input>;
+		using result = ct::opt<match<A>::cmb>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, A>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C>>));
 	}
 	SECTION("when not matching, still succeed, but no advancement") {
-		using result = ct::opt<match<B>::type>::type<input>;
+		using result = ct::opt<match<B>::cmb>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, std::tuple<>>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<A, B, C>>));
@@ -74,21 +74,21 @@ TEST_CASE("Comptime 'seq' succeeds when all it's elements succeed", "[comptime:s
 	using input = std::tuple<A, B, C, D, E>;
 
 	SECTION("it succeeds when it matches all the way") {
-		using result = ct::seq<match<A>::type, match<B>::type, match<C>::type, match<D>::type>::type<input>;
+		using result = ct::seq<match<A>::cmb, match<B>::cmb, match<C>::cmb, match<D>::cmb>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, std::tuple<A, B, C, D>>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<E>>));
 	}
 	SECTION("it can fail right at the beginning") {
-		using result = ct::seq<match<B>::type, match<B>::type, match<C>::type, match<D>::type>::type<input>;
+		using result = ct::seq<match<B>::cmb, match<B>::cmb, match<C>::cmb, match<D>::cmb>::cmb<input>;
 		REQUIRE(!result::success);
 	}
 	SECTION("it can fail in the middle") {
-		using result = ct::seq<match<A>::type, match<B>::type, match<D>::type, match<D>::type>::type<input>;
+		using result = ct::seq<match<A>::cmb, match<B>::cmb, match<D>::cmb, match<D>::cmb>::cmb<input>;
 		REQUIRE(!result::success);
 	}
 	SECTION("it can fail at the end") {
-		using result = ct::seq<match<A>::type, match<B>::type, match<C>::type, match<E>::type>::type<input>;
+		using result = ct::seq<match<A>::cmb, match<B>::cmb, match<C>::cmb, match<E>::cmb>::cmb<input>;
 		REQUIRE(!result::success);
 	}
 }
@@ -97,25 +97,25 @@ TEST_CASE("Comptime 'alt' tries all the alternatives until one succeeds", "[comp
 	using input = std::tuple<A, B, C, D, E>;
 
 	SECTION("succeeding can occur as the first alternative") {
-		using result = ct::alt<match<A>::type, match<B>::type, match<C>::type>::type<input>;
+		using result = ct::alt<match<A>::cmb, match<B>::cmb, match<C>::cmb>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, A>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C, D, E>>));
 	}
 	SECTION("succeeding can occur as some middle alternative") {
-		using result = ct::alt<match<B>::type, match<A>::type, match<C>::type>::type<input>;
+		using result = ct::alt<match<B>::cmb, match<A>::cmb, match<C>::cmb>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, A>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C, D, E>>));
 	}
 	SECTION("succeeding can occur as the last alternative") {
-		using result = ct::alt<match<B>::type, match<C>::type, match<A>::type>::type<input>;
+		using result = ct::alt<match<B>::cmb, match<C>::cmb, match<A>::cmb>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, A>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C, D, E>>));
 	}
 	SECTION("it fails when no alternatives match") {
-		using result = ct::alt<match<B>::type, match<D>::type, match<C>::type>::type<input>;
+		using result = ct::alt<match<B>::cmb, match<D>::cmb, match<C>::cmb>::cmb<input>;
 		REQUIRE(!result::success);
 	}
 }
@@ -125,19 +125,19 @@ TEST_CASE("Comptime 'rep' collects the same result while it's combinator succeed
 	using input2 = std::tuple<B, B, B, E>;
 
 	SECTION("succeeds on zero matches") {
-		using result = ct::rep<match<A>::type>::type<input1>;
+		using result = ct::rep<match<A>::cmb>::cmb<input1>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, std::tuple<>>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<E, B, B, B, E>>));
 	}
 	SECTION("succeeds on a single match") {
-		using result = ct::rep<match<E>::type>::type<input1>;
+		using result = ct::rep<match<E>::cmb>::cmb<input1>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, E>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, B, B, E>>));
 	}
 	SECTION("succeeds on multiple matches") {
-		using result = ct::rep<match<B>::type>::type<input2>;
+		using result = ct::rep<match<B>::cmb>::cmb<input2>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, std::tuple<B, B, B>>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<E>>));
@@ -149,17 +149,17 @@ TEST_CASE("Comptime 'rep1' collects the same result while it's combinator succee
 	using input2 = std::tuple<B, B, B, E>;
 
 	SECTION("fails on zero matches") {
-		using result = ct::rep1<match<A>::type>::type<input1>;
+		using result = ct::rep1<match<A>::cmb>::cmb<input1>;
 		REQUIRE(!result::success);
 	}
 	SECTION("succeeds on a single match") {
-		using result = ct::rep1<match<E>::type>::type<input1>;
+		using result = ct::rep1<match<E>::cmb>::cmb<input1>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, E>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, B, B, E>>));
 	}
 	SECTION("succeeds on multiple matches") {
-		using result = ct::rep1<match<B>::type>::type<input2>;
+		using result = ct::rep1<match<B>::cmb>::cmb<input2>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, std::tuple<B, B, B>>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<E>>));
@@ -180,7 +180,7 @@ struct transform_to_d_if_a {
 
 template <>
 struct transform_to_d_if_a<A> {
-	using type = ct::map_succ<D>;
+	using type = D;
 };
 
 ////
@@ -192,30 +192,30 @@ struct transform_to_d_if_b {
 
 template <>
 struct transform_to_d_if_b<B> {
-	using type = ct::map_succ<D>;
+	using type = D;
 };
 
 TEST_CASE("Comptime 'map' applies a transformation for a successful result", "[comptime:map]") {
 	using input = std::tuple<A, B, C>;
 
 	SECTION("failing the inner combinator does not apply mapping") {
-		using result = ct::map<match<B>::type, transform_to_d>::type<input>;
+		using result = ct::map<match<B>::cmb, transform_to_d>::cmb<input>;
 		REQUIRE(!result::success);
 	}
 	SECTION("succeeding the inner combinator applies the mapping") {
-		using result = ct::map<match<A>::type, transform_to_d>::type<input>;
+		using result = ct::map<match<A>::cmb, transform_to_d>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, D>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C>>));
 	}
 	SECTION("succeeding the inner combinator applies the mapping, that also succeeds") {
-		using result = ct::map<match<A>::type, transform_to_d_if_a>::type<input>;
+		using result = ct::map<match<A>::cmb, transform_to_d_if_a>::cmb<input>;
 		REQUIRE(result::success);
 		REQUIRE((std::is_same_v<typename result::result, D>));
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C>>));
 	}
 	SECTION("succeeding the inner combinator applies the mapping that fails, so the whole thing fails") {
-		using result = ct::map<match<A>::type, transform_to_d_if_b>::type<input>;
+		using result = ct::map<match<A>::cmb, transform_to_d_if_b>::cmb<input>;
 		REQUIRE(!result::success);
 	}
 }
