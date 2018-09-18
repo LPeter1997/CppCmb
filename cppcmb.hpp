@@ -226,6 +226,8 @@ namespace detail {
 	 */
 	template <typename Predicate>
 	struct filter_impl {
+		// XXX(LPeter1997): Assert that Predicate is not a function pointer
+	
 		constexpr filter_impl() = default;
 
 		template <typename... Ts>
@@ -263,6 +265,8 @@ namespace detail {
 	 */
 	template <typename Folder>
 	struct foldl_impl {
+		// XXX(LPeter1997): Assert that Folder is not a function pointer
+	
 		constexpr foldl_impl() = default;
 
 		template <typename Init, typename Rest>
@@ -280,6 +284,8 @@ namespace detail {
 	 */
 	template <typename Folder>
 	struct foldr_impl {
+		// XXX(LPeter1997): Assert that Folder is not a function pointer
+	
 		constexpr foldr_impl() = default;
 
 		template <typename Init, typename Rest>
