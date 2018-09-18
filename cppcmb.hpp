@@ -637,6 +637,75 @@ public:
 			: seq<P, rep<P>::template type>::
 			template type<Collection<Ts...>> {};
 	};
+
+	/**
+	 * Types to mark a mapping that could succeed or fail.
+	 */
+	template <typename>
+	struct map_succ {};
+
+	struct map_fail {};
+
+	/**
+	 * Applies a combinator. If it succeeded, the result data is applied to a
+	 * transformation function. If the transformation can fail, then it's also
+	 * considered when returning (on transformation failure the combinator
+	 * fails).
+	 */
+	template <template <typename> typename P, template <typename...> typename M>
+	struct map {
+	private:
+		// General non-failing case
+		template <typename Res, typename Rem>
+		struct applied_result : success_result<unwrap_single_t<Res>, Rem> {};
+
+		// Can fail, success
+		template <typename Res, typename Rem>
+		struct applied_result<map_succ<Res>, Rem>
+			: success_result<unwrap_single_t<Res>, Rem> {};
+
+		// Can fail, failed
+		template <typename Rem>
+		struct applied_result<map_fail, Rem> : fail_result {};
+
+		//////////
+
+		template <typename Res>
+		struct apply_map {
+			using type = typename M<Res>::type;
+		};
+
+		template <typename... Ts>
+		struct apply_map<std::tuple<Ts...>> {
+			using type = typename M<Ts...>::type;
+		};
+
+		template <typename Res>
+		using apply_map_t = typename apply_map<Res>::type;
+
+		//////////
+
+		template <bool, typename, typename>
+		struct call;
+
+		template <typename Res, typename Rem>
+		struct call<false, Res, Rem> : fail_result {};
+
+		template <typename Res, typename Rem>
+		struct call<true, Res, Rem> : applied_result<apply_map_t<Res>, Rem> {};
+
+	public:
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>>
+			: call<
+				P<Collection<Ts...>>::success,
+				typename P<Collection<Ts...>>::result,
+				typename P<Collection<Ts...>>::remaining
+			> {};
+	};
 };
 
 /**

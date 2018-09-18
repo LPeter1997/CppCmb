@@ -165,3 +165,57 @@ TEST_CASE("Comptime 'rep1' collects the same result while it's combinator succee
 		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<E>>));
 	}
 }
+
+template <typename T>
+struct transform_to_d {
+	using type = D;
+};
+
+////
+
+template <typename T>
+struct transform_to_d_if_a {
+	using type = ct::map_fail;
+};
+
+template <>
+struct transform_to_d_if_a<A> {
+	using type = ct::map_succ<D>;
+};
+
+////
+
+template <typename T>
+struct transform_to_d_if_b {
+	using type = ct::map_fail;
+};
+
+template <>
+struct transform_to_d_if_b<B> {
+	using type = ct::map_succ<D>;
+};
+
+TEST_CASE("Comptime 'map' applies a transformation for a successful result", "[comptime:map]") {
+	using input = std::tuple<A, B, C>;
+
+	SECTION("failing the inner combinator does not apply mapping") {
+		using result = ct::map<match<B>::type, transform_to_d>::type<input>;
+		REQUIRE(!result::success);
+	}
+	SECTION("succeeding the inner combinator applies the mapping") {
+		using result = ct::map<match<A>::type, transform_to_d>::type<input>;
+		REQUIRE(result::success);
+		REQUIRE((std::is_same_v<typename result::result, D>));
+		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C>>));
+	}
+	SECTION("succeeding the inner combinator applies the mapping, that also succeeds") {
+		using result = ct::map<match<A>::type, transform_to_d_if_a>::type<input>;
+		REQUIRE(result::success);
+		REQUIRE((std::is_same_v<typename result::result, D>));
+		REQUIRE((std::is_same_v<typename result::remaining, std::tuple<B, C>>));
+	}
+	SECTION("succeeding the inner combinator applies the mapping that fails, so the whole thing fails") {
+		using result = ct::map<match<A>::type, transform_to_d_if_b>::type<input>;
+		REQUIRE(!result::success);
+	}
+}
