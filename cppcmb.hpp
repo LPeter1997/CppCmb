@@ -385,28 +385,49 @@ public:
 
 private:
 	/**
-	 * Utility to concatenate resulting collections.
+	 * Check if a type is a collection.
 	 */
-	template <typename U, typename V>
-	struct concat_result {
+	template <typename>
+	struct is_collection : std::false_type {};
+
+	template <typename... Ts>
+	struct is_collection<Collection<Ts...>> : std::true_type {};
+
+	template <typename T>
+	static constexpr bool is_collection_v = is_collection<T>::value;
+
+	/**
+	 * Utility to concatenate resulting collections.
+	 * We need this because of ambiguous instantiations...
+	 */
+	template <bool, bool, typename U, typename V>
+	struct concat_result_impl {
 		using type = Collection<U, V>;
 	};
 
 	template <typename U, typename... Vs>
-	struct concat_result<U, Collection<Vs...>> {
+	struct concat_result_impl<false, true, U, Collection<Vs...>> {
 		using type = Collection<U, Vs...>;
 	};
 
 	template <typename... Us, typename V>
-	struct concat_result<Collection<Us...>, V> {
+	struct concat_result_impl<true, false, Collection<Us...>, V> {
 		using type = Collection<Us..., V>;
 	};
 
 	template <typename... Us, typename... Vs>
-	struct concat_result<Collection<Us...>, Collection<Vs...>> {
+	struct concat_result_impl<true, true,
+		Collection<Us...>, Collection<Vs...>> {
 		using type = Collection<Us..., Vs...>;
 	};
 
+	template <typename U, typename V>
+	struct concat_result
+		: concat_result_impl<is_collection_v<U>, is_collection_v<V>, U, V> {};
+
+	/**
+	 * Unwrap a single collection element into that single element.
+	 */
 	template <typename T>
 	struct unwrap_single {
 		using type = T;
@@ -683,7 +704,7 @@ public:
 		};
 
 		template <typename... Ts>
-		struct apply_map<std::tuple<Ts...>> {
+		struct apply_map<Collection<Ts...>> {
 			using type = typename M<Ts...>::type;
 		};
 
