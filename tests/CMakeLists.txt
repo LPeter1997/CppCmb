@@ -9,6 +9,7 @@ set(ALL_SOURCES
 	catch.cpp
 	test_fundamentals.cpp
 	test_wiki_code.cpp
+	test_comptime.cpp
 )
 
 add_executable(tests ${ALL_SOURCES})

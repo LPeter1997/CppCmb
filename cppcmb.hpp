@@ -340,6 +340,306 @@ namespace detail {
 } /* namespace detail */
 
 /**
+ * A module interface for compile-time parser combinators.
+ */
+template <template <typename...> typename Collection>
+struct combinator_comptime {
+public:
+	/**
+	 * Result type is a triplet of the success flag, the parsing result and the
+	 * remaining input.
+	 */
+	template <bool Succ, typename Res, typename Rem>
+	struct result_type {
+		static constexpr bool success = Succ;
+		using result = Res;
+		using remaining = Rem;
+	};
+
+	/**
+	 * Shortcut for succeeding result.
+	 */
+	template <typename Res, typename Rem>
+	using success_result = result_type<true, Res, Rem>;
+
+	/**
+	 * Shortcut for failing result. We default the result to void and the
+	 * remaining input to empty container.
+	 */
+	using fail_result = result_type<false, void, Collection<>>;
+
+private:
+	/**
+	 * Utility to concatenate resulting collections.
+	 */
+	template <typename U, typename V>
+	struct concat_result {
+		using type = Collection<U, V>;
+	};
+
+	template <typename U, typename... Vs>
+	struct concat_result<U, Collection<Vs...>> {
+		using type = Collection<U, Vs...>;
+	};
+
+	template <typename... Us, typename V>
+	struct concat_result<Collection<Us...>, V> {
+		using type = Collection<Us..., V>;
+	};
+
+	template <typename... Us, typename... Vs>
+	struct concat_result<Collection<Us...>, Collection<Vs...>> {
+		using type = Collection<Us..., Vs...>;
+	};
+
+	template <typename T>
+	struct unwrap_single {
+		using type = T;
+	};
+
+	template <typename T>
+	struct unwrap_single<Collection<T>> {
+		using type = typename unwrap_single<T>::type;
+	};
+
+	template <typename T>
+	using unwrap_single_t = typename unwrap_single<T>::type;
+
+public:
+	template <typename U, typename V>
+	using concat_result_t = unwrap_single_t<typename concat_result<U, V>::type>;
+
+private:
+	/**
+	 * We need a one-implementation here to have a dummy type to be able to
+	 * specialize it explicitly.
+	 */
+	template <typename, typename>
+	struct one_impl;
+
+	template <typename Dummy>
+	struct one_impl<Collection<>, Dummy> : fail_result {};
+
+	template <typename First, typename... Rest, typename Dummy>
+	struct one_impl<Collection<First, Rest...>, Dummy>
+		: success_result<First, Collection<Rest...>> {};
+
+	/**
+	 * Sequencing two combinators together.
+	 */
+	template <template <typename> typename P1, template <typename> typename P2>
+	struct mbind2 {
+		template <typename, bool, typename, typename>
+		struct call2;
+
+		template <typename OldRes, typename NewRes, typename Rem>
+		struct call2<OldRes, false, NewRes, Rem> : fail_result {};
+
+		template <typename OldRes, typename NewRes, typename Rem>
+		struct call2<OldRes, true, NewRes, Rem>
+			: success_result<concat_result_t<OldRes, NewRes>, Rem> {};
+
+		template <bool, typename, typename>
+		struct call1;
+
+		template <typename Res, typename Rem>
+		struct call1<false, Res, Rem> : fail_result {};
+
+		template <typename Res, typename Rem>
+		struct call1<true, Res, Rem>
+			: call2<Res, P2<Rem>::success,
+			typename P2<Rem>::result, typename P2<Rem>::remaining> {};
+
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>>
+			: call1<
+				P1<Collection<Ts...>>::success,
+				typename P1<Collection<Ts...>>::result,
+				typename P1<Collection<Ts...>>::remaining
+			> {};
+	};
+
+public:
+	/**
+	 * The simplest combinator that succeeds with an empty result.
+	 */
+	template <typename>
+	struct succ;
+
+	template <typename... Ts>
+	struct succ<Collection<Ts...>>
+		: success_result<Collection<>, Collection<Ts...>> {};
+
+	/**
+	 * A combinator that always fails.
+	 */
+	template <typename>
+	struct fail;
+
+	template <typename... Ts>
+	struct fail<Collection<Ts...>> : fail_result {};
+
+	/**
+	 * A combinator that returns the current token and advances the position by
+	 * one. Fails if there is no more input.
+	 */
+	template <typename In>
+	struct one : one_impl<In, void> {};
+
+	/**
+	 * Wraps another combinator so that it becomes optional. This combinator
+	 * therefore always succeeds but does not always yield a result.
+	 */
+	template <template <typename> typename P>
+	struct opt {
+	private:
+		template <bool, typename, typename, typename>
+		struct call;
+
+		template <typename Res, typename OldRem, typename NewRem>
+		struct call<false, Res, OldRem, NewRem>
+			: success_result<Collection<>, OldRem> {};
+
+		template <typename Res, typename OldRem, typename NewRem>
+		struct call<true, Res, OldRem, NewRem>
+			: success_result<Res, NewRem> {};
+
+	public:
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>>
+			: call<
+				P<Collection<Ts...>>::success,
+				typename P<Collection<Ts...>>::result,
+				Collection<Ts...>,
+				typename P<Collection<Ts...>>::remaining
+			> {};
+	};
+
+	/**
+	 * Applies combinators in a sequence and concatenates the results if all of
+	 * them succeeds. If one fails, the whole sequence fails.
+	 */
+	template <template <typename> typename...>
+	struct seq;
+
+	template <template <typename> typename P1, template <typename> typename P2,
+		template <typename> typename... PRest>
+	struct seq<P1, P2, PRest...>
+		: seq<mbind2<P1, P2>::template type, PRest...> {};
+
+	template <template <typename> typename P1>
+	struct seq<P1> {
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>> : P1<Collection<Ts...>> {};
+	};
+
+	/**
+	 * Applies the combinators and returns with the first succeeding one. If
+	 * none of them succeeds, the combinator fails.
+	 */
+	template <template <typename> typename...>
+	struct alt;
+
+	template <template <typename> typename PFirst,
+		template <typename> typename... PRest>
+	struct alt<PFirst, PRest...> {
+	private:
+		template <bool, typename, typename, typename>
+		struct call;
+
+		template <typename Res, typename OldRem, typename NewRem>
+		struct call<false, Res, OldRem, NewRem>
+			: alt<PRest...>::template type<OldRem> {};
+
+		template <typename Res, typename OldRem, typename NewRem>
+		struct call<true, Res, OldRem, NewRem>
+			: success_result<Res, NewRem> {};
+
+	public:
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>>
+			: call<
+				PFirst<Collection<Ts...>>::success,
+				typename PFirst<Collection<Ts...>>::result,
+				Collection<Ts...>,
+				typename PFirst<Collection<Ts...>>::remaining
+			> {};
+	};
+
+	template <template <typename> typename P>
+	struct alt<P> {
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>> : P<Collection<Ts...>> {};
+	};
+
+	/**
+	 * Repeatedly applies a combinator while it succeeds, concatenates results.
+	 * Stops on faliure.
+	 */
+	template <template <typename> typename P>
+	struct rep {
+	private:
+		template <bool, typename, typename, typename, typename>
+		struct call;
+
+		template <typename OldRes, typename OldRem,
+			typename NewRes, typename NewRem>
+		struct call<false, OldRes, OldRem, NewRes, NewRem>
+			: success_result<unwrap_single_t<OldRes>, OldRem> {};
+
+		template <typename OldRes, typename OldRem,
+			typename NewRes, typename NewRem>
+		struct call<true, OldRes, OldRem, NewRes, NewRem>
+			: call<P<NewRem>::success,
+				NewRes, NewRem,
+				concat_result_t<NewRes, typename P<NewRem>::result>,
+				typename P<NewRem>::remaining> {};
+
+	public:
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>>
+			: call<true,
+				Collection<>, Collection<Ts...>,
+				Collection<>, Collection<Ts...>
+			> {};
+	};
+
+	/**
+	 * Repeatedly applies a combinator while it succeeds. Stops on faliure.
+	 * Collects result into a collection. Succeeds if it collected at least one
+	 * element.
+	 */
+	template <template <typename> typename P>
+	struct rep1 {
+		template <typename>
+		struct type;
+
+		template <typename... Ts>
+		struct type<Collection<Ts...>>
+			: seq<P, rep<P>::template type>::
+			template type<Collection<Ts...>> {};
+	};
+};
+
+/**
  * A module interface for a template-style grammar definition.
  */
 template <typename TokenIterator>
