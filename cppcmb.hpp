@@ -779,6 +779,14 @@ public:
  */
 template <typename TokenIterator>
 struct combinator_types : private detail::maybe_ctors {
+private:
+	using iterator_category = typename
+		std::iterator_traits<TokenIterator>::iterator_category;
+	static_assert(
+		std::is_base_of_v<std::forward_iterator_tag, iterator_category>,
+		"The module requires a forward iterator!"
+	);
+
 public:
 	/**
 	 * General result type.
