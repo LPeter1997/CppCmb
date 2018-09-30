@@ -19,3 +19,8 @@ You can open issues, or do a pull-request if you've implemented/fixed something.
 # To do:
 * Add more examples
 * Test and make it work on MSVC (currently only worked with GCC, untested on everything else)
+
+# Roadmap:
+* There is a work-in-progress lexer that will hopefully get integrated into the library soon
+* Need error reporting and a way to describe parsers to the user
+* Policy for different behaviours (error collection, alternative paths, ...)
