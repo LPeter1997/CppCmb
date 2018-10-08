@@ -18,6 +18,11 @@
 #include <utility>
 
 // XXX(LPeter1997): Make decltype(auto) where appropriate
+// XXX(LPeter1997): We could make aliases for compile-time parser so we wouldn't
+// need foo<T>::bar
+
+// template <typename T>
+// using foo_c = typename foo<T>::template bar<T>;
 
 namespace cppcmb {
 
@@ -352,6 +357,24 @@ namespace detail {
 
 	template <typename T>
 	using enable_if_cmb_t = typename enable_if_cmb<T>::type;
+
+// Defaults so we can have operators
+#ifndef cppcmb_default_rep_container
+	template <typename T>
+	using rep_container_t = std::vector<T>;
+#else
+	template <typename T>
+	using rep_container_t = cppcmb_default_rep_container<T>;
+#endif
+
+#ifndef cppcmb_default_rep1_container
+	template <typename T>
+	using rep1_container_t = std::vector<T>;
+#else
+	template <typename T>
+	using rep1_container_t = cppcmb_default_rep1_container<T>;
+#endif
+
 } /* namespace detail */
 
 /**
@@ -1206,6 +1229,36 @@ constexpr auto operator|(Left&& l, Right&& r) {
 
 	return cppcmb::combinator_values<iter_type>::alt(
 		std::forward<Left>(l), std::forward<Right>(r)
+	);
+}
+
+/**
+ * Repetition (0 or more).
+ */
+template <typename Arg,
+	typename = cppcmb::detail::enable_if_cmb_t<Arg>>
+constexpr auto operator*(Arg&& a) {
+	using arg_t = std::decay_t<Arg>;
+	using iter_type = typename arg_t::iterator_type;
+
+	return cppcmb::combinator_values<iter_type>::
+	template rep<cppcmb::detail::rep_container_t>(
+		std::forward<Arg>(a)
+	);
+}
+
+/**
+ * Repetition (1 or more).
+ */
+template <typename Arg,
+	typename = cppcmb::detail::enable_if_cmb_t<Arg>>
+constexpr auto operator+(Arg&& a) {
+	using arg_t = std::decay_t<Arg>;
+	using iter_type = typename arg_t::iterator_type;
+
+	return cppcmb::combinator_values<iter_type>::
+	template rep1<cppcmb::detail::rep1_container_t>(
+		std::forward<Arg>(a)
 	);
 }
 
