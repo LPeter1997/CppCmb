@@ -762,7 +762,7 @@ static_assert(                                        \
     };
 
     // Value for 'end' parser
-    inline /*  */ end_t end = end_t();
+    inline /* constexpr */ end_t end = end_t();
 
 } /* namespace cppcmb */
 
