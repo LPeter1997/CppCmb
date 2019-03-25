@@ -188,7 +188,7 @@ namespace cppcmb {
             cppcmb_return(m_Cursor);
 
         [[nodiscard]] constexpr auto is_end() const
-            cppcmb_return(m_Cursor == std::size(*m_Source));
+            cppcmb_return(m_Cursor >= std::size(*m_Source));
 
         [[nodiscard]] constexpr auto current() const
             cppcmb_return((*m_Source)[m_Cursor]);
@@ -271,7 +271,10 @@ namespace cppcmb {
         struct result_base {};
 
         template <typename T>
-        inline constexpr bool is_result_v = std::is_base_of_v<result_base, T>;
+        using is_result = std::is_base_of<result_base, T>;
+
+        template <typename T>
+        inline constexpr bool is_result_v = is_result<T>::value;
 
     } /* namespace detail */
 
@@ -324,6 +327,176 @@ namespace cppcmb {
 
     namespace detail {
 
+        class value_pack_base {};
+
+        template <typename T>
+        using is_value_pack = std::is_base_of<value_pack_base, T>;
+
+        template <typename T>
+        inline constexpr bool is_value_pack_v = is_value_pack<T>::value;
+
+    } /* namespace detail */
+
+    /**
+     * A tuple-like object that can stores a sequence of results.
+     */
+    template <typename... Ts>
+    class value_pack : private detail::value_pack_base {
+    private:
+        using tuple_type = decltype(std::make_tuple(std::declval<Ts>()...));
+
+        tuple_type m_Value;
+
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, value_pack>;
+
+    public:
+        static constexpr auto index_sequence =
+            std::make_index_sequence<sizeof...(Ts)>();
+
+        template <typename T, cppcmb_requires_t(!is_self_v<T>)>
+        constexpr value_pack(T&& val)
+            : m_Value(std::make_tuple(cppcmb_fwd(val))) {
+        }
+
+        template <typename... Us, cppcmb_requires_t(sizeof...(Us) != 1)>
+        constexpr value_pack(Us&&... vals)
+            : m_Value(std::make_tuple(cppcmb_fwd(vals)...)) {
+        }
+
+        template <std::size_t Idx>
+        [[nodiscard]] constexpr auto get() &
+            cppcmb_return(std::get<Idx>(m_Value));
+        template <std::size_t Idx>
+        [[nodiscard]] constexpr auto get() const&
+            cppcmb_return(std::get<Idx>(m_Value));
+        template <std::size_t Idx>
+        [[nodiscard]] constexpr auto get() &&
+            cppcmb_return(std::get<Idx>(std::move(m_Value)));
+        template <std::size_t Idx>
+        [[nodiscard]] constexpr auto get() const&&
+            cppcmb_return(std::get<Idx>(std::move(m_Value)));
+    };
+
+    template <typename... Ts>
+    value_pack(Ts&&...) -> value_pack<Ts&&...>;
+
+    namespace detail {
+
+        // Base-case
+        template <typename... Ts>
+        [[nodiscard]] constexpr auto cat_values_impl(value_pack<Ts...>&& res)
+            cppcmb_return(std::move(res));
+
+        template <typename T>
+        [[nodiscard]] constexpr auto cat_values_impl(value_pack<T>&& res)
+            cppcmb_return(std::move(res).template get<0>());
+
+        // XXX(LPeter1997): Exception specifier
+        // Recursive-case signature
+        template <typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]]
+        constexpr auto
+        cat_values_impl(value_pack<Ts...>&&, Head&&, Tail&&...);
+
+        // XXX(LPeter1997): Exception specifier
+        template <std::size_t... Is,
+            typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]]
+        constexpr auto cat_values_head_disp(
+            std::index_sequence<Is...>,
+            value_pack<Ts...>&& res, Head&& h, Tail&&... t) {
+
+            return cat_values_impl(
+                std::move(res),
+                cppcmb_fwd(h).template get<Is>()...,
+                cppcmb_fwd(t)...
+            );
+        }
+
+        // XXX(LPeter1997): Exception specifier
+        // Head is a value pack
+        template <typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]]
+        constexpr auto cat_values_impl_single(
+            std::true_type,
+            value_pack<Ts...>&& res, Head&& h, Tail&&... t) {
+
+            using head_t = detail::remove_cvref_t<Head>;
+            return cat_values_head_disp(
+                head_t::index_sequence,
+                std::move(res),
+                cppcmb_fwd(h),
+                cppcmb_fwd(t)...
+            );
+        }
+
+        // XXX(LPeter1997): Exception specifier
+        template <std::size_t... Is,
+            typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]]
+        constexpr auto cat_values_head_append(
+            std::index_sequence<Is...>,
+            value_pack<Ts...>&& res, Head&& h, Tail&&... t) {
+
+            return cat_values_impl(
+                value_pack(
+                    std::move(res).template get<Is>()...,
+                    cppcmb_fwd(h)
+                ),
+                cppcmb_fwd(t)...
+            );
+        }
+
+        // XXX(LPeter1997): Exception specifier
+        // Head is not a value pack
+        template <typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]]
+        constexpr auto cat_values_impl_single(
+            std::false_type,
+            value_pack<Ts...>&& res, Head&& h, Tail&&... t) {
+
+            return cat_values_head_append(
+                value_pack<Ts...>::index_sequence,
+                std::move(res),
+                cppcmb_fwd(h),
+                cppcmb_fwd(t)...
+            );
+        }
+
+        // XXX(LPeter1997): Exception specifier
+        // Recursive-case
+        template <typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]]
+        constexpr auto
+        cat_values_impl(value_pack<Ts...>&& res, Head&& h, Tail&&... t) {
+            using tag_type =
+                detail::is_value_pack<detail::remove_cvref_t<Head>>;
+
+            return cat_values_impl_single(
+                tag_type(),
+                std::move(res),
+                cppcmb_fwd(h),
+                cppcmb_fwd(t)...
+            );
+        }
+
+    } /* namespace detail */
+
+    /**
+     * Concatenate value packs and values.
+     */
+    template <typename... Ts>
+    [[nodiscard]]
+    constexpr auto cat_values(Ts&&... vs)
+        cppcmb_return(
+            // XXX(LPeter1997): Bug in GCC?
+            detail::cat_values_impl(value_pack<>(), cppcmb_fwd(vs)...)
+        );
+
+    namespace detail {
+
         /**
          * A tag-type for every combinator.
          * Also provides an ID that is unique for every new combinator but the
@@ -373,14 +546,14 @@ namespace cppcmb {
 
     // Forward-declare the action combinator
     template <typename Cmb, typename Fn>
-    class action;
+    class action_t;
 
     /**
      * Every combinator must derive from this (so we can inject the subscript
      * operator).
      */
     #define cppcmb_noexcept_subscript(...) \
-    noexcept(noexcept(action(std::declval<__VA_ARGS__>(), cppcmb_fwd(fn))))
+    noexcept(noexcept(action_t(std::declval<__VA_ARGS__>(), cppcmb_fwd(fn))))
 
     template <typename Self>
     class combinator : public detail::crtp<Self>,
@@ -389,25 +562,25 @@ namespace cppcmb {
         template <typename Fn>
         [[nodiscard]] constexpr auto operator[](Fn&& fn) &
         cppcmb_noexcept_subscript(Self&) {
-            return action(this->self(), cppcmb_fwd(fn));
+            return action_t(this->self(), cppcmb_fwd(fn));
         }
 
         template <typename Fn>
         [[nodiscard]] constexpr auto operator[](Fn&& fn) const&
         cppcmb_noexcept_subscript(Self const&) {
-            return action(this->self(), cppcmb_fwd(fn));
+            return action_t(this->self(), cppcmb_fwd(fn));
         }
 
         template <typename Fn>
         [[nodiscard]] constexpr auto operator[](Fn&& fn) &&
         cppcmb_noexcept_subscript(Self&&) {
-            return action(std::move(this->self()), cppcmb_fwd(fn));
+            return action_t(std::move(this->self()), cppcmb_fwd(fn));
         }
 
         template <typename Fn>
         [[nodiscard]] constexpr auto operator[](Fn&& fn) const&&
         cppcmb_noexcept_subscript(Self const&&) {
-            return action(std::move(this->self()), cppcmb_fwd(fn));
+            return action_t(std::move(this->self()), cppcmb_fwd(fn));
         }
     };
 
@@ -454,14 +627,14 @@ static_assert(                                        \
      * succeeds.
      */
     template <typename P, typename Fn>
-    class action : public combinator<action<P, Fn>> {
+    class action_t : public combinator<action_t<P, Fn>> {
     private:
         P  m_Parser;
         Fn m_Fn;
 
     public:
         template <typename PFwd, typename FnFwd>
-        constexpr action(PFwd&& cmb, FnFwd&& fn)
+        constexpr action_t(PFwd&& cmb, FnFwd&& fn)
             noexcept(noexcept(cppcmb_fwd(cmb)) && noexcept(cppcmb_fwd(fn)))
             : m_Parser(cppcmb_fwd(cmb)), m_Fn(cppcmb_fwd(fn)) {
         }
@@ -483,7 +656,7 @@ static_assert(                                        \
 
             using fn_result_t = std::invoke_result_t<Fn, value_t>;
             using dispatch_tag =
-                std::bool_constant<detail::is_result_v<fn_result_t>>;
+                detail::is_result<detail::remove_cvref_t<fn_result_t>>;
 
             return apply_impl<fn_result_t>(src, dispatch_tag());
         }
@@ -539,10 +712,57 @@ static_assert(                                        \
     };
 
     template <typename PFwd, typename FnFwd>
-    action(PFwd&&, FnFwd&&) -> action<
+    action_t(PFwd&&, FnFwd&&) -> action_t<
         detail::remove_cvref_t<PFwd>,
         std::decay_t<FnFwd>
     >;
+
+    /**
+     * A parser that simply consumes a single element. Succeeds if there is an
+     * element to consume.
+     */
+    class one_t : public combinator<one_t> {
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<typename reader<Src>::value_type> {
+
+            if (r.is_end()) {
+                // Nothing to consume
+                return failure(r.cursor());
+            }
+            else {
+                return success(r.current(), r.cursor() + 1);
+            }
+        }
+    };
+
+    // Value for 'one' parser
+    inline /* constexpr */ one_t one = one_t();
+
+    /**
+     * A parser that succeeds with an empty result if the input has ended.
+     */
+    class end_t : public combinator<end_t> {
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<value_pack<>> {
+
+            if (r.is_end()) {
+                // XXX(LPeter1997): GCC bug?
+                return success(value_pack<>(), r.cursor());
+            }
+            else {
+                return failure(r.cursor());
+            }
+        }
+    };
+
+    // Value for 'end' parser
+    inline /*  */ end_t end = end_t();
 
 } /* namespace cppcmb */
 
