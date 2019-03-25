@@ -437,6 +437,7 @@ static_assert(                                        \
     ::cppcmb::detail::has_parser_interface_v<p, src>, \
     "A parser must be derived from combinator<Self> " \
     " and have a member function apply(reader<Src>)!" \
+    " (note: apply has to be const-qualified!)"       \
 )
 
     /**
@@ -477,6 +478,7 @@ static_assert(                                        \
                 std::is_invocable_v<Fn, value_t>,
                 "The given action function must be invocable with the parser's "
                 "successful value type!"
+                " (note: the function's invocation must be const-qualified!)"
             );
 
             using fn_result_t = std::invoke_result_t<Fn, value_t>;
