@@ -502,16 +502,7 @@ namespace cppcmb {
          * Also provides an ID that is unique for every new combinator but the
          * same for copies. Good for cache-ing results, like the packrat parser.
          */
-        class combinator_base {
-        private:
-            static inline std::size_t s_ID_Counter = 0;
-
-            std::size_t m_ID = s_ID_Counter++;
-
-        public:
-            [[nodiscard]] constexpr auto parser_id() const
-                cppcmb_return(m_ID);
-        };
+        struct combinator_base {};
 
         /**
          * CRTP helper.
@@ -739,7 +730,7 @@ static_assert(                                        \
     };
 
     // Value for 'one' parser
-    inline /* constexpr */ one_t one = one_t();
+    inline constexpr one_t one = one_t();
 
     /**
      * A parser that succeeds with an empty result if the input has ended.
@@ -762,7 +753,7 @@ static_assert(                                        \
     };
 
     // Value for 'end' parser
-    inline /* constexpr */ end_t end = end_t();
+    inline constexpr end_t end = end_t();
 
 } /* namespace cppcmb */
 
