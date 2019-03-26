@@ -190,22 +190,24 @@ namespace cppcmb {
         [[nodiscard]] constexpr auto is_end() const
             cppcmb_return(m_Cursor >= std::size(*m_Source));
 
-        [[nodiscard]] constexpr auto current() const
-            cppcmb_return((*m_Source)[m_Cursor]);
+        [[nodiscard]] constexpr auto const& current() const noexcept {
+            cppcmb_assert(
+                "current() can only be invoked when the cursor is not past the "
+                "elements!",
+                cursor() < std::size(source())
+            );
+            return (*m_Source)[m_Cursor];
+        }
 
         constexpr void seek(std::size_t idx) noexcept {
             cppcmb_assert(
                 "seek() argument must be in the bounds of source!",
-                idx < std::size(source())
+                idx <= std::size(source())
             );
             m_Cursor = idx;
         }
 
         constexpr void next() noexcept {
-            cppcmb_assert(
-                "next() must not be called when is_end() is true!",
-                !is_end()
-            );
             seek(cursor() + 1);
         }
     };
@@ -295,7 +297,8 @@ namespace cppcmb {
         std::variant<success_type, failure_type> m_Data;
 
     public:
-        template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+        template <typename TFwd,
+            cppcmb_requires_t(!is_self_v<TFwd>)>
         constexpr result(TFwd&& val) noexcept(noexcept(cppcmb_fwd(val)))
             : m_Data(cppcmb_fwd(val)) {
         }
@@ -578,6 +581,20 @@ namespace cppcmb {
     template <typename Cmb, typename Fn>
     class action_t;
 
+    namespace detail {
+
+        // Helpers for operators
+
+        template <typename T>
+        inline constexpr bool is_combinator_cvref_v =
+            is_combinator_v<remove_cvref_t<T>>;
+
+        template <typename... Ts>
+        inline constexpr bool all_combinators_cvref_v =
+            (... & is_combinator_cvref_v<Ts>);
+
+    } /* namespace detail */
+
     /**
      * Every combinator must derive from this (so we can inject the subscript
      * operator).
@@ -648,7 +665,7 @@ static_assert(                                        \
      */
     template <typename P, typename Src>
     using parser_value_t = detail::remove_cvref_t<decltype(
-        std::declval<P>().apply(std::declval<reader<Src>&>())
+        std::declval<P>().apply(std::declval<reader<Src> const&>())
             .success().value()
     )>;
 
@@ -663,6 +680,7 @@ static_assert(                                        \
         Fn m_Fn;
 
     public:
+        // XXX(LPeter1997): Is it right to have such a long noexcept specifier?
         template <typename PFwd, typename FnFwd>
         constexpr action_t(PFwd&& cmb, FnFwd&& fn)
             noexcept(noexcept(cppcmb_fwd(cmb)) && noexcept(cppcmb_fwd(fn)))
@@ -802,6 +820,79 @@ static_assert(                                        \
 
     // Value for 'end' parser
     inline constexpr end_t end = end_t();
+
+    /**
+     * A parser that applies applies the first, then the second parser if the
+     * first one succeeded, then concatenates the results. Only succeeds if both
+     * succeeds.
+     */
+    template <typename P1, typename P2>
+    class seq_t : public combinator<seq_t<P1, P2>> {
+    private:
+        template <typename Src>
+        using value_t = decltype(cat_values(
+            std::declval<parser_value_t<P1, Src>>(),
+            std::declval<parser_value_t<P2, Src>>()
+        ));
+
+        P1 m_First;
+        P2 m_Second;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P1Fwd, typename P2Fwd>
+        constexpr seq_t(P1Fwd&& p1, P2Fwd&& p2)
+            : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<value_t<Src>> {
+            cppcmb_assert_parser(P1, Src);
+            cppcmb_assert_parser(P2, Src);
+
+            auto p1_inv = m_First.apply(r);
+            if (p1_inv.is_failure()) {
+                // Early failure, don't continue
+                return std::move(p1_inv).failure();
+            }
+            // Get the success alternative
+            auto p1_succ = std::move(p1_inv).success();
+            // Create the next reader
+            auto r2 = reader(r.source(), p1_succ.remaining());
+            // Invoke the second parser
+            auto p2_inv = m_Second.apply(r2);
+            if (p2_inv.is_failure()) {
+                // Second failed, fail on that error
+                return std::move(p2_inv).failure();
+            }
+            // Get the success alternative
+            auto p2_succ = std::move(p2_inv).success();
+            // Combine the values
+            return success(
+                cat_values(
+                    std::move(p1_succ).value(),
+                    std::move(p2_succ).value()
+                ),
+                p2_succ.remaining()
+            );
+        }
+    };
+
+    template <typename P1Fwd, typename P2Fwd>
+    seq_t(P1Fwd&&, P2Fwd&&) -> seq_t<
+        detail::remove_cvref_t<P1Fwd>,
+        detail::remove_cvref_t<P2Fwd>
+    >;
+
+    /**
+     * Operator for making a sequence.
+     */
+    template <typename P1, typename P2,
+        cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
+    [[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
+        cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
 
 } /* namespace cppcmb */
 
