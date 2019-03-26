@@ -377,6 +377,15 @@ namespace cppcmb {
         template <std::size_t Idx>
         [[nodiscard]] constexpr auto get() const&&
             cppcmb_return(std::get<Idx>(std::move(m_Value)));
+
+        [[nodiscard]] constexpr auto as_tuple() &
+            cppcmb_return(m_Value);
+        [[nodiscard]] constexpr auto as_tuple() const&
+            cppcmb_return(m_Value);
+        [[nodiscard]] constexpr auto as_tuple() &&
+            cppcmb_return(std::move(m_Value));
+        [[nodiscard]] constexpr auto as_tuple() const&&
+            cppcmb_return(std::move(m_Value));
     };
 
     template <typename... Ts>
@@ -493,6 +502,36 @@ namespace cppcmb {
         cppcmb_return(
             // XXX(LPeter1997): Bug in GCC?
             detail::cat_values_impl(pack<>(), cppcmb_fwd(vs)...)
+        );
+
+    namespace detail {
+
+        // Arg is a pack
+        template <typename Fn, typename T>
+        [[nodiscard]] constexpr auto apply_values_impl(
+            std::true_type,
+            Fn&& fn, T&& arg)
+            cppcmb_return(std::apply(
+                cppcmb_fwd(fn), cppcmb_fwd(arg).as_tuple()
+            ));
+
+        // Arg is not a pack
+        template <typename Fn, typename T>
+        [[nodiscard]] constexpr auto apply_values_impl(
+            std::false_type,
+            Fn&& fn, T&& arg)
+            cppcmb_return(cppcmb_fwd(fn)(cppcmb_fwd(arg)));
+
+    } /* namespace detail */
+
+    template <typename Fn, typename T>
+    [[nodiscard]] constexpr auto apply_values(Fn&& fn, T&& arg)
+        cppcmb_return(
+            detail::apply_values_impl(
+                detail::is_pack<detail::remove_cvref_t<T>>(),
+                cppcmb_fwd(fn),
+                cppcmb_fwd(arg)
+            )
         );
 
     namespace detail {
@@ -638,14 +677,18 @@ static_assert(                                        \
 
             using value_t = parser_value_t<P, Src>;
 
+            using apply_t = decltype(&action_t::apply_fn<value_t&&>);
+            // XXX(LPeter1997): Maybe check with invoke result
+            // to make sure type-deduction happened?
             static_assert(
-                std::is_invocable_v<Fn, value_t>,
+                std::is_invocable_v<apply_t, action_t, value_t>,
                 "The given action function must be invocable with the parser's "
                 "successful value type!"
                 " (note: the function's invocation must be const-qualified!)"
             );
 
-            using fn_result_t = std::invoke_result_t<Fn, value_t>;
+            using fn_result_t =
+                std::invoke_result_t<apply_t, action_t, value_t>;
             using dispatch_tag =
                 detail::is_result<detail::remove_cvref_t<fn_result_t>>;
 
@@ -668,7 +711,7 @@ static_assert(                                        \
 
             auto succ = std::move(inv).success();
             // Try to apply the action
-            auto act_inv = m_Fn(std::move(succ).value());
+            auto act_inv = apply_fn(std::move(succ).value());
             // In any case we will have to decorate the result with the position
             if (act_inv.is_failure()) {
                 return failure(src.cursor());
@@ -696,10 +739,15 @@ static_assert(                                        \
 
             auto succ = std::move(inv).success();
             // Apply the action
-            auto act_val = m_Fn(std::move(succ).value());
+            auto act_val = apply_fn(std::move(succ).value());
             // Wrap it in a success
             return success(std::move(act_val), succ.remaining());
         }
+
+        // Invoke the function with a value
+        template <typename T>
+        [[nodiscard]] constexpr auto apply_fn(T&& val) const
+            cppcmb_return(apply_values(m_Fn, cppcmb_fwd(val)));
     };
 
     template <typename PFwd, typename FnFwd>
