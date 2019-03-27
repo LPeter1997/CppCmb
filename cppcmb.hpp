@@ -286,8 +286,8 @@ namespace cppcmb {
     template <typename T>
     class result : private detail::result_base {
     public:
-        using success_type = success<T>;
-        using failure_type = failure;
+        using success_type = ::cppcmb::success<T>;
+        using failure_type = ::cppcmb::failure;
 
     private:
         template <typename U>
@@ -392,102 +392,75 @@ namespace cppcmb {
     };
 
     template <typename... Ts>
-    pack(Ts&&...) -> pack<Ts&&...>;
+    pack(Ts&&...) -> pack<detail::remove_cvref_t<Ts>...>;
 
     namespace detail {
 
-        // Base-case
+        // Base-case for sizeof...(Ts) != 1
         template <typename... Ts>
         [[nodiscard]] constexpr auto cat_values_impl(pack<Ts...>&& res)
             cppcmb_return(std::move(res));
 
+        // Base-case for exactly one element
         template <typename T>
         [[nodiscard]] constexpr auto cat_values_impl(pack<T>&& res)
-            cppcmb_return(std::move(res).template get<0>());
+            cppcmb_return(std::get<0>(std::move(res)));
 
-        // XXX(LPeter1997): Exception specifier
-        // Recursive-case signature
         template <typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]]
-        constexpr auto
-        cat_values_impl(pack<Ts...>&&, Head&&, Tail&&...);
+        [[nodiscard]] constexpr auto
+        cat_values_impl(pack<Ts...>&& res, Head&& h, Tail&&... t) noexcept;
 
-        // XXX(LPeter1997): Exception specifier
         template <std::size_t... Is,
             typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]]
-        constexpr auto cat_values_head_disp(
+        [[nodiscard]] constexpr auto cat_values_expand(
             std::index_sequence<Is...>,
-            pack<Ts...>&& res, Head&& h, Tail&&... t) {
-
-            return cat_values_impl(
+            pack<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(cat_values_impl(
                 std::move(res),
                 cppcmb_fwd(h).template get<Is>()...,
                 cppcmb_fwd(t)...
-            );
-        }
+            ));
 
-        // XXX(LPeter1997): Exception specifier
-        // Head is a value pack
+        template <std::size_t... Is,
+            typename... Ts, typename Head, typename... Tail>
+        [[nodiscard]] constexpr auto cat_values_append(
+            std::index_sequence<Is...>,
+            pack<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(cat_values_impl(
+                // XXX(LPeter1997): GCC bug?
+                pack<Ts..., remove_cvref_t<Head>>(
+                    std::move(res).template get<Is>()..., cppcmb_fwd(h)
+                ),
+                cppcmb_fwd(t)...
+            ));
+
         template <typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]]
-        constexpr auto cat_values_impl_single(
+        [[nodiscard]] constexpr auto cat_values_head(
             std::true_type,
-            pack<Ts...>&& res, Head&& h, Tail&&... t) {
-
-            using head_t = detail::remove_cvref_t<Head>;
-            return cat_values_head_disp(
-                head_t::index_sequence,
+            pack<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(cat_values_expand(
+                remove_cvref_t<Head>::index_sequence,
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
-            );
-        }
+            ));
 
-        // XXX(LPeter1997): Exception specifier
-        template <std::size_t... Is,
-            typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]]
-        constexpr auto cat_values_head_append(
-            std::index_sequence<Is...>,
-            pack<Ts...>&& res, Head&& h, Tail&&... t) {
-
-            return cat_values_impl(
-                pack(
-                    std::move(res).template get<Is>()...,
-                    cppcmb_fwd(h)
-                ),
-                cppcmb_fwd(t)...
-            );
-        }
-
-        // XXX(LPeter1997): Exception specifier
-        // Head is not a value pack
         template <typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]]
-        constexpr auto cat_values_impl_single(
+        [[nodiscard]] constexpr auto cat_values_head(
             std::false_type,
-            pack<Ts...>&& res, Head&& h, Tail&&... t) {
-
-            return cat_values_head_append(
+            pack<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(cat_values_append(
                 pack<Ts...>::index_sequence,
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
-            );
-        }
+            ));
 
-        // XXX(LPeter1997): Exception specifier
-        // Recursive-case
         template <typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]]
-        constexpr auto
-        cat_values_impl(pack<Ts...>&& res, Head&& h, Tail&&... t) {
-            using tag_type =
-                detail::is_pack<detail::remove_cvref_t<Head>>;
-
-            return cat_values_impl_single(
-                tag_type(),
+        [[nodiscard]] constexpr auto
+        cat_values_impl(pack<Ts...>&& res, Head&& h, Tail&&... t) noexcept {
+            return cat_values_head(
+                is_pack<remove_cvref_t<Head>>(),
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
@@ -500,8 +473,7 @@ namespace cppcmb {
      * Concatenate value packs and values.
      */
     template <typename... Ts>
-    [[nodiscard]]
-    constexpr auto cat_values(Ts&&... vs)
+    [[nodiscard]] constexpr auto cat_values(Ts&&... vs)
         cppcmb_return(
             // XXX(LPeter1997): Bug in GCC?
             detail::cat_values_impl(pack<>(), cppcmb_fwd(vs)...)
