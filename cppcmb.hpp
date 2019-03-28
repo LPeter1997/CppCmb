@@ -330,13 +330,13 @@ namespace cppcmb {
 
     namespace detail {
 
-        class pack_base {};
+        class product_base {};
 
         template <typename T>
-        using is_pack = std::is_base_of<pack_base, T>;
+        using is_product = std::is_base_of<product_base, T>;
 
         template <typename T>
-        inline constexpr bool is_pack_v = is_pack<T>::value;
+        inline constexpr bool is_product_v = is_product<T>::value;
 
     } /* namespace detail */
 
@@ -344,7 +344,7 @@ namespace cppcmb {
      * A tuple-like object that can stores a sequence of results.
      */
     template <typename... Ts>
-    class pack : private detail::pack_base {
+    class product : private detail::product_base {
     private:
         using tuple_type = decltype(std::make_tuple(std::declval<Ts>()...));
 
@@ -352,19 +352,21 @@ namespace cppcmb {
 
         template <typename U>
         static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, pack>;
+            std::is_same_v<detail::remove_cvref_t<U>, product>;
 
     public:
         static constexpr auto index_sequence =
             std::make_index_sequence<sizeof...(Ts)>();
 
+        // XXX(LPeter1997): Exception specifier?
         template <typename T, cppcmb_requires_t(!is_self_v<T>)>
-        constexpr pack(T&& val)
+        constexpr product(T&& val)
             : m_Value(std::make_tuple(cppcmb_fwd(val))) {
         }
 
+        // XXX(LPeter1997): Exception specifier?
         template <typename... Us, cppcmb_requires_t(sizeof...(Us) != 1)>
-        constexpr pack(Us&&... vals)
+        constexpr product(Us&&... vals)
             : m_Value(std::make_tuple(cppcmb_fwd(vals)...)) {
         }
 
@@ -392,30 +394,31 @@ namespace cppcmb {
     };
 
     template <typename... Ts>
-    pack(Ts&&...) -> pack<detail::remove_cvref_t<Ts>...>;
+    product(Ts&&...) -> product<detail::remove_cvref_t<Ts>...>;
 
     namespace detail {
 
         // Base-case for sizeof...(Ts) != 1
         template <typename... Ts>
-        [[nodiscard]] constexpr auto cat_values_impl(pack<Ts...>&& res)
+        [[nodiscard]] constexpr auto product_values_impl(product<Ts...>&& res)
             cppcmb_return(std::move(res));
 
         // Base-case for exactly one element
         template <typename T>
-        [[nodiscard]] constexpr auto cat_values_impl(pack<T>&& res)
+        [[nodiscard]] constexpr auto product_values_impl(product<T>&& res)
             cppcmb_return(std::get<0>(std::move(res)));
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
-        cat_values_impl(pack<Ts...>&& res, Head&& h, Tail&&... t) noexcept;
+        product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t)
+            noexcept;
 
         template <std::size_t... Is,
             typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]] constexpr auto cat_values_expand(
+        [[nodiscard]] constexpr auto product_values_expand(
             std::index_sequence<Is...>,
-            pack<Ts...>&& res, Head&& h, Tail&&... t)
-            cppcmb_return(cat_values_impl(
+            product<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(product_values_impl(
                 std::move(res),
                 cppcmb_fwd(h).template get<Is>()...,
                 cppcmb_fwd(t)...
@@ -423,22 +426,22 @@ namespace cppcmb {
 
         template <std::size_t... Is,
             typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]] constexpr auto cat_values_append(
+        [[nodiscard]] constexpr auto product_values_append(
             std::index_sequence<Is...>,
-            pack<Ts...>&& res, Head&& h, Tail&&... t)
-            cppcmb_return(cat_values_impl(
+            product<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(product_values_impl(
                 // XXX(LPeter1997): GCC bug?
-                pack<Ts..., remove_cvref_t<Head>>(
+                product<Ts..., remove_cvref_t<Head>>(
                     std::move(res).template get<Is>()..., cppcmb_fwd(h)
                 ),
                 cppcmb_fwd(t)...
             ));
 
         template <typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]] constexpr auto cat_values_head(
+        [[nodiscard]] constexpr auto product_values_head(
             std::true_type,
-            pack<Ts...>&& res, Head&& h, Tail&&... t)
-            cppcmb_return(cat_values_expand(
+            product<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(product_values_expand(
                 remove_cvref_t<Head>::index_sequence,
                 std::move(res),
                 cppcmb_fwd(h),
@@ -446,11 +449,11 @@ namespace cppcmb {
             ));
 
         template <typename... Ts, typename Head, typename... Tail>
-        [[nodiscard]] constexpr auto cat_values_head(
+        [[nodiscard]] constexpr auto product_values_head(
             std::false_type,
-            pack<Ts...>&& res, Head&& h, Tail&&... t)
-            cppcmb_return(cat_values_append(
-                pack<Ts...>::index_sequence,
+            product<Ts...>&& res, Head&& h, Tail&&... t)
+            cppcmb_return(product_values_append(
+                product<Ts...>::index_sequence,
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
@@ -458,9 +461,9 @@ namespace cppcmb {
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
-        cat_values_impl(pack<Ts...>&& res, Head&& h, Tail&&... t) noexcept {
-            return cat_values_head(
-                is_pack<remove_cvref_t<Head>>(),
+        product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t) noexcept {
+            return product_values_head(
+                is_product<remove_cvref_t<Head>>(),
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
@@ -470,29 +473,94 @@ namespace cppcmb {
     } /* namespace detail */
 
     /**
-     * Concatenate value packs and values.
+     * Concatenate products and values.
      */
     template <typename... Ts>
-    [[nodiscard]] constexpr auto cat_values(Ts&&... vs)
+    [[nodiscard]] constexpr auto product_values(Ts&&... vs)
         cppcmb_return(
             // XXX(LPeter1997): Bug in GCC?
-            detail::cat_values_impl(pack<>(), cppcmb_fwd(vs)...)
+            detail::product_values_impl(product<>(), cppcmb_fwd(vs)...)
         );
 
     namespace detail {
 
-        // Arg is a pack
+        class sum_base {};
+
+        template <typename T>
+        using is_sum = std::is_base_of<sum_base, T>;
+
+        template <typename T>
+        inline constexpr bool is_sum_v = is_sum<T>::value;
+
+    } /* namespace detail */
+
+    template <typename... Ts>
+    class sum : private detail::sum_base {
+    private:
+        using variant_type = std::variant<Ts...>;
+
+        variant_type m_Value;
+
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, sum>;
+
+    public:
+        // XXX(LPeter1997): Exception specifier?
+        template <typename T, cppcmb_requires_t(!is_self_v<T>)>
+        constexpr sum(T&& val)
+            : m_Value(cppcmb_fwd(val)) {
+        }
+
+        template <typename U>
+        [[nodiscard]] constexpr auto get() &
+            cppcmb_return(std::get<U>(m_Value));
+        template <typename U>
+        [[nodiscard]] constexpr auto get() const&
+            cppcmb_return(std::get<U>(m_Value));
+        template <typename U>
+        [[nodiscard]] constexpr auto get() &&
+            cppcmb_return(std::get<U>(std::move(m_Value)));
+        template <typename U>
+        [[nodiscard]] constexpr auto get() const&&
+            cppcmb_return(std::get<U>(std::move(m_Value)));
+
+        [[nodiscard]] constexpr auto as_variant() &
+            cppcmb_return(m_Value);
+        [[nodiscard]] constexpr auto as_variant() const&
+            cppcmb_return(m_Value);
+        [[nodiscard]] constexpr auto as_variant() &&
+            cppcmb_return(std::move(m_Value));
+        [[nodiscard]] constexpr auto as_variant() const&&
+            cppcmb_return(std::move(m_Value));
+    };
+
+    namespace detail {
+
+        // Arg is a product
         template <typename Fn, typename T>
-        [[nodiscard]] constexpr auto apply_values_impl(
+        [[nodiscard]] constexpr auto apply_value_impl(
             std::true_type,
+            std::false_type,
             Fn&& fn, T&& arg)
             cppcmb_return(std::apply(
                 cppcmb_fwd(fn), cppcmb_fwd(arg).as_tuple()
             ));
 
-        // Arg is not a pack
+        // Arg is a sum
         template <typename Fn, typename T>
-        [[nodiscard]] constexpr auto apply_values_impl(
+        [[nodiscard]] constexpr auto apply_value_impl(
+            std::false_type,
+            std::true_type,
+            Fn&& fn, T&& arg)
+            cppcmb_return(std::visit(
+                cppcmb_fwd(fn), cppcmb_fwd(arg).as_variant()
+            ));
+
+        // Arg is a single value
+        template <typename Fn, typename T>
+        [[nodiscard]] constexpr auto apply_value_impl(
+            std::false_type,
             std::false_type,
             Fn&& fn, T&& arg)
             cppcmb_return(cppcmb_fwd(fn)(cppcmb_fwd(arg)));
@@ -500,10 +568,11 @@ namespace cppcmb {
     } /* namespace detail */
 
     template <typename Fn, typename T>
-    [[nodiscard]] constexpr auto apply_values(Fn&& fn, T&& arg)
+    [[nodiscard]] constexpr auto apply_value(Fn&& fn, T&& arg)
         cppcmb_return(
-            detail::apply_values_impl(
-                detail::is_pack<detail::remove_cvref_t<T>>(),
+            detail::apply_value_impl(
+                detail::is_product<detail::remove_cvref_t<T>>(),
+                detail::is_sum<detail::remove_cvref_t<T>>(),
                 cppcmb_fwd(fn),
                 cppcmb_fwd(arg)
             )
@@ -513,8 +582,6 @@ namespace cppcmb {
 
         /**
          * A tag-type for every combinator.
-         * Also provides an ID that is unique for every new combinator but the
-         * same for copies. Good for cache-ing results, like the packrat parser.
          */
         struct combinator_base {};
 
@@ -737,7 +804,7 @@ static_assert(                                        \
         // Invoke the function with a value
         template <typename T>
         [[nodiscard]] constexpr auto apply_fn(T&& val) const
-            cppcmb_return(apply_values(m_Fn, cppcmb_fwd(val)));
+            cppcmb_return(apply_value(m_Fn, cppcmb_fwd(val)));
     };
 
     template <typename PFwd, typename FnFwd>
@@ -778,11 +845,11 @@ static_assert(                                        \
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
         [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-            -> result<pack<>> {
+            -> result<product<>> {
 
             if (r.is_end()) {
                 // XXX(LPeter1997): GCC bug?
-                return success(pack<>(), r.cursor());
+                return success(product<>(), r.cursor());
             }
             else {
                 return failure(r.cursor());
@@ -794,15 +861,14 @@ static_assert(                                        \
     inline constexpr end_t end = end_t();
 
     /**
-     * A parser that applies applies the first, then the second parser if the
-     * first one succeeded, then concatenates the results. Only succeeds if both
-     * succeeds.
+     * A parser that applies the first, then the second parser if the first one
+     * succeeded, then concatenates the results. Only succeeds if both succeeds.
      */
     template <typename P1, typename P2>
     class seq_t : public combinator<seq_t<P1, P2>> {
     private:
         template <typename Src>
-        using value_t = decltype(cat_values(
+        using value_t = decltype(product_values(
             std::declval<parser_value_t<P1, Src>>(),
             std::declval<parser_value_t<P2, Src>>()
         ));
@@ -843,7 +909,7 @@ static_assert(                                        \
             auto p2_succ = std::move(p2_inv).success();
             // Combine the values
             return success(
-                cat_values(
+                product_values(
                     std::move(p1_succ).value(),
                     std::move(p2_succ).value()
                 ),
@@ -865,6 +931,23 @@ static_assert(                                        \
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
     [[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
         cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
+
+    /**
+     * A parser that tries to parse the first alternative. If that fails,
+     * applies the second one. Succeeds if at least one succeeds.
+     */
+    template <typename P1, typename P2>
+    class alt_t : public combinator<alt_t<P1, P2>> {
+    private:
+        /*template <typename Src>
+        using value_t = decltype(product_values(
+            std::declval<parser_value_t<P1, Src>>(),
+            std::declval<parser_value_t<P2, Src>>()
+        ));*/
+
+        P1 m_First;
+        P2 m_Second;
+    };
 
 } /* namespace cppcmb */
 
