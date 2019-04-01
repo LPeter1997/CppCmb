@@ -997,6 +997,20 @@ static_assert(                                        \
         cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
 
     /**
+     * A tag-type for a more uniform alternative syntax.
+     * This can be put as the first element of an alternative chain so every new
+     * line can start with the alternative operator. It's completely ignored.
+     * Example:
+     * auto parser = pass
+     *             | first
+     *             | second
+     *             ;
+     */
+    struct pass_t {};
+
+    inline constexpr auto pass = pass_t();
+
+    /**
      * A parser that tries to parse the first alternative. If that fails,
      * applies the second one. Succeeds if at least one succeeds.
      */
@@ -1004,12 +1018,10 @@ static_assert(                                        \
     class alt_t : public combinator<alt_t<P1, P2>> {
     private:
         template <typename Src>
-        using value_t = decltype(sum_values<
-                parser_value_t<P1, Src>,
-                parser_value_t<P2, Src>
-            >(
-            std::declval<parser_value_t<P1, Src>>()
-        ));
+        using value_t = sum_values_t<
+            parser_value_t<P1, Src>,
+            parser_value_t<P2, Src>
+        >;
 
         P1 m_First;
         P2 m_Second;
@@ -1031,13 +1043,21 @@ static_assert(                                        \
             // Try to apply the first alternative
             auto p1_inv = m_First.apply(r);
             if (p1_inv.is_success()) {
-                return std::move(p1_inv).success();
+                auto p1_succ = std::move(p1_inv).success();
+                return success(
+                    sum_values<value_t<Src>>(std::move(p1_succ).value()),
+                    p1_succ.remaining()
+                );
             }
 
             // Try to apply the second alternative
             auto p2_inv = m_Second.apply(r);
             if (p2_inv.is_success()) {
-                return std::move(p2_inv).success();
+                auto p2_succ = std::move(p2_inv).success();
+                return success(
+                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                    p2_succ.remaining()
+                );
             }
 
             // Both failed, return the error which got further
@@ -1071,6 +1091,16 @@ static_assert(                                        \
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
     [[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2)
         cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
+
+    /**
+     * Ignore pass.
+     */
+    template <typename P2,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
+    [[nodiscard]] constexpr auto operator|(pass_t, P2&& p2)
+        cppcmb_return(cppcmb_fwd(p2));
+
+    // XXX(LPeter1997): Add an eager alternative with ||
 
 } /* namespace cppcmb */
 
