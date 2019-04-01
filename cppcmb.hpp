@@ -1100,7 +1100,116 @@ static_assert(                                        \
     [[nodiscard]] constexpr auto operator|(pass_t, P2&& p2)
         cppcmb_return(cppcmb_fwd(p2));
 
-    // XXX(LPeter1997): Add an eager alternative with ||
+    /**
+     * A parser that tries all alternatives and then returns the furthest
+     * advanced alternative.
+     */
+    template <typename P1, typename P2>
+    class eager_alt_t : public combinator<eager_alt_t<P1, P2>> {
+    private:
+        template <typename Src>
+        using value_t = sum_values_t<
+            parser_value_t<P1, Src>,
+            parser_value_t<P2, Src>
+        >;
+
+        P1 m_First;
+        P2 m_Second;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P1Fwd, typename P2Fwd>
+        constexpr eager_alt_t(P1Fwd&& p1, P2Fwd&& p2)
+            : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<value_t<Src>> {
+            cppcmb_assert_parser(P1, Src);
+            cppcmb_assert_parser(P2, Src);
+
+            // Try to apply both alternatives
+            auto p1_inv = m_First.apply(r);
+            auto p2_inv = m_Second.apply(r);
+
+            // Both succeeded
+            if (p1_inv.is_success() && p2_inv.is_success()) {
+                // Return the one that got further
+                // If they both got the same distance, return the first one
+                auto p1_succ = std::move(p1_inv).success();
+                auto p2_succ = std::move(p2_inv).success();
+
+                if (p1_succ.remaining() >= p2_succ.remaining()) {
+                    return success(
+                        sum_values<value_t<Src>>(std::move(p1_succ).value()),
+                        p1_succ.remaining()
+                    );
+                }
+                else {
+                    return success(
+                        sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                        p2_succ.remaining()
+                    );
+                }
+            }
+            // LHS succeeded
+            if (p1_inv.is_success()) {
+                auto p1_succ = std::move(p1_inv).success();
+                return success(
+                    sum_values<value_t<Src>>(std::move(p1_succ).value()),
+                    p1_succ.remaining()
+                );
+            }
+            // RHS succeeded
+            if (p2_inv.is_success()) {
+                auto p2_succ = std::move(p2_inv).success();
+                return success(
+                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                    p2_succ.remaining()
+                );
+            }
+
+            // Both failed, return the error which got further
+            auto p1_err = std::move(p1_inv).failure();
+            auto p2_err = std::move(p2_inv).failure();
+
+            if (p1_err.furthest() > p2_err.furthest()) {
+                return p1_err;
+            }
+            else if (p1_err.furthest() < p2_err.furthest()) {
+                return p2_err;
+            }
+            else {
+                // They got to the same distance, need to merge errors
+                // XXX(LPeter1997): Implement, for now we just return the first
+                return p1_err;
+            }
+        }
+    };
+
+    template <typename P1Fwd, typename P2Fwd>
+    eager_alt_t(P1Fwd&&, P2Fwd&&) -> eager_alt_t<
+        detail::remove_cvref_t<P1Fwd>,
+        detail::remove_cvref_t<P2Fwd>
+    >;
+
+    /**
+     * Operator for making eager alternatives.
+     */
+    template <typename P1, typename P2,
+        cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
+    [[nodiscard]] constexpr auto operator||(P1&& p1, P2&& p2)
+        cppcmb_return(eager_alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
+
+    /**
+     * Ignore pass.
+     */
+    template <typename P2,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
+    [[nodiscard]] constexpr auto operator||(pass_t, P2&& p2)
+        cppcmb_return(cppcmb_fwd(p2));
 
 } /* namespace cppcmb */
 
