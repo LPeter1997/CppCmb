@@ -1003,15 +1003,74 @@ static_assert(                                        \
     template <typename P1, typename P2>
     class alt_t : public combinator<alt_t<P1, P2>> {
     private:
-        /*template <typename Src>
-        using value_t = decltype(product_values(
-            std::declval<parser_value_t<P1, Src>>(),
-            std::declval<parser_value_t<P2, Src>>()
-        ));*/
+        template <typename Src>
+        using value_t = decltype(sum_values<
+                parser_value_t<P1, Src>,
+                parser_value_t<P2, Src>
+            >(
+            std::declval<parser_value_t<P1, Src>>()
+        ));
 
         P1 m_First;
         P2 m_Second;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P1Fwd, typename P2Fwd>
+        constexpr alt_t(P1Fwd&& p1, P2Fwd&& p2)
+            : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<value_t<Src>> {
+            cppcmb_assert_parser(P1, Src);
+            cppcmb_assert_parser(P2, Src);
+
+            // Try to apply the first alternative
+            auto p1_inv = m_First.apply(r);
+            if (p1_inv.is_success()) {
+                return std::move(p1_inv).success();
+            }
+
+            // Try to apply the second alternative
+            auto p2_inv = m_Second.apply(r);
+            if (p2_inv.is_success()) {
+                return std::move(p2_inv).success();
+            }
+
+            // Both failed, return the error which got further
+            auto p1_err = std::move(p1_inv).failure();
+            auto p2_err = std::move(p2_inv).failure();
+
+            if (p1_err.furthest() > p2_err.furthest()) {
+                return p1_err;
+            }
+            else if (p1_err.furthest() < p2_err.furthest()) {
+                return p2_err;
+            }
+            else {
+                // They got to the same distance, need to merge errors
+                // XXX(LPeter1997): Implement, for now we just return the first
+                return p1_err;
+            }
+        }
     };
+
+    template <typename P1Fwd, typename P2Fwd>
+    alt_t(P1Fwd&&, P2Fwd&&) -> alt_t<
+        detail::remove_cvref_t<P1Fwd>,
+        detail::remove_cvref_t<P2Fwd>
+    >;
+
+    /**
+     * Operator for making alternatives.
+     */
+    template <typename P1, typename P2,
+        cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
+    [[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2)
+        cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
 
 } /* namespace cppcmb */
 
