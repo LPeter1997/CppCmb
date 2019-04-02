@@ -12,6 +12,7 @@
 #include <cassert>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -1384,7 +1385,7 @@ static_assert(                                        \
     many1_t(PFwd&&) -> many1_t<detail::remove_cvref_t<PFwd>>;
 
     /**
-     * Operator for making many parser.
+     * Operator for making many1 parser.
      */
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
@@ -1398,6 +1399,58 @@ static_assert(                                        \
         cppcmb_requires_t(detail::is_many_v<detail::remove_cvref_t<P>>)>
     [[nodiscard]] constexpr auto operator>>(P&& p, To to)
         cppcmb_return(cppcmb_fwd(p).collect_to(to));
+
+    /**
+     * A parser that wraps the underlying parse result into a maybe-type.
+     * Always succeeds, but the maybe-type only contains a value if the
+     * underlying parser succeeds.
+     */
+    template <typename P>
+    class opt_t : public combinator<opt_t<P>> {
+    private:
+        // XXX(LPeter1997): Change to own optional-like
+        template <typename Src>
+        using value_t = std::optional<parser_value_t<P, Src>>;
+
+        P m_Parser;
+
+    public:
+        // XXX(LPeter1997): noexcept specifier
+        template <typename PFwd>
+        constexpr opt_t(PFwd&& p)
+            : m_Parser(cppcmb_fwd(p)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<value_t<Src>> {
+            cppcmb_assert_parser(P, Src);
+
+            auto p_inv = m_Parser.apply(r);
+            if (p_inv.is_failure()) {
+                return success(value_t<Src>(), r.cursor());
+            }
+            else {
+                auto succ = std::move(p_inv).success();
+                return success(
+                    value_t<Src>(std::move(succ).value()),
+                    succ.remaining()
+                );
+            }
+        }
+    };
+
+    template <typename PFwd>
+    opt_t(PFwd&&) -> opt_t<detail::remove_cvref_t<PFwd>>;
+
+    /**
+     * Operator for making optional parser.
+     */
+    template <typename P,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+    [[nodiscard]] constexpr auto operator-(P&& p)
+        cppcmb_return(opt_t(cppcmb_fwd(p)));
 
 } /* namespace cppcmb */
 
