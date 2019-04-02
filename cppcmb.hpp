@@ -224,11 +224,16 @@ namespace cppcmb {
         using value_type = T;
 
     private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, success>;
+
         value_type  m_Value;
         std::size_t m_Remaining;
 
     public:
-        template <typename TFwd>
+        template <typename TFwd,
+            cppcmb_requires_t(!is_self_v<TFwd>)>
         constexpr success(TFwd&& val, std::size_t rem = 0)
             noexcept(noexcept(cppcmb_fwd(val)))
             : m_Value(cppcmb_fwd(val)), m_Remaining(rem) {
@@ -361,13 +366,15 @@ namespace cppcmb {
             std::make_index_sequence<sizeof...(Ts)>();
 
         // XXX(LPeter1997): Exception specifier?
-        template <typename T, cppcmb_requires_t(!is_self_v<T>)>
+        template <typename T,
+            cppcmb_requires_t(!is_self_v<T>)>
         constexpr product(T&& val)
             : m_Value(std::make_tuple(cppcmb_fwd(val))) {
         }
 
         // XXX(LPeter1997): Exception specifier?
-        template <typename... Us, cppcmb_requires_t(sizeof...(Us) != 1)>
+        template <typename... Us,
+            cppcmb_requires_t(sizeof...(Us) != 1)>
         constexpr product(Us&&... vals)
             : m_Value(std::make_tuple(cppcmb_fwd(vals)...)) {
         }
@@ -509,7 +516,8 @@ namespace cppcmb {
 
     public:
         // XXX(LPeter1997): Exception specifier?
-        template <typename T, cppcmb_requires_t(!is_self_v<T>)>
+        template <typename T,
+            cppcmb_requires_t(!is_self_v<T>)>
         constexpr sum(T&& val)
             : m_Value(cppcmb_fwd(val)) {
         }
@@ -1255,6 +1263,10 @@ static_assert(                                        \
     class many_t : public combinator<many_t<P>>,
                    private detail::many_tag {
     private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, many_t>;
+
         template <typename Src>
         using value_t = typename To::template type<parser_value_t<P, Src>>;
 
@@ -1262,7 +1274,8 @@ static_assert(                                        \
 
     public:
         // XXX(LPeter1997): Noexcept specifier
-        template <typename PFwd>
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr many_t(PFwd&& p)
             : m_Parser(cppcmb_fwd(p)) {
         }
@@ -1331,6 +1344,10 @@ static_assert(                                        \
     class many1_t : public combinator<many1_t<P>>,
                     private detail::many_tag {
     private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, many1_t>;
+
         template <typename Src>
         using value_t = parser_value_t<many_t<P, To>, Src>;
 
@@ -1338,7 +1355,8 @@ static_assert(                                        \
 
     public:
         // XXX(LPeter1997): Noexcept specifier
-        template <typename PFwd>
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr many1_t(PFwd&& p)
             : m_Parser(many_t<P, To>(cppcmb_fwd(p))) {
         }
@@ -1408,6 +1426,10 @@ static_assert(                                        \
     template <typename P>
     class opt_t : public combinator<opt_t<P>> {
     private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, opt_t>;
+
         // XXX(LPeter1997): Change to own optional-like
         template <typename Src>
         using value_t = std::optional<parser_value_t<P, Src>>;
@@ -1416,7 +1438,8 @@ static_assert(                                        \
 
     public:
         // XXX(LPeter1997): noexcept specifier
-        template <typename PFwd>
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr opt_t(PFwd&& p)
             : m_Parser(cppcmb_fwd(p)) {
         }
