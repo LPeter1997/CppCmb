@@ -1536,6 +1536,57 @@ static_assert(                                        \
     inline constexpr auto                                               \
     ::cppcmb::detail::rule_set<typename decltype(name)::tag_type>
 
+    /**
+     * Some helper functionalities for the action combinator.
+     * Not strictly parsing, but helpful utilities, like dropping elements.
+     */
+
+    /**
+     * Only accepts the input, if it satisfies a given predicate.
+     */
+    template <typename Pred>
+    class filter {
+    private:
+        template <typename... Ts>
+        using value_t = decltype(product_values(
+            std::declval<Ts>()...
+        ));
+
+        Pred m_Predicate;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename PredFwd>
+        constexpr filter(PredFwd&& pred)
+            : m_Predicate(cppcmb_fwd(pred)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename... Ts>
+        constexpr auto operator()(Ts&&... args) const
+            -> result<value_t<Ts&&...>> {
+            static_assert(
+                std::is_invocable_v<Pred, Ts&&...>,
+                "The predicate must be invocable with the parser value!"
+            );
+            using result_t = std::invoke_result_t<Pred, Ts&&...>;
+            static_assert(
+                std::is_convertible_v<result_t, bool>,
+                "The predicate must return a type that is convertible to bool!"
+            );
+
+            if (m_Predicate(args...)) {
+                return success(product_values(cppcmb_fwd(args)...));
+            }
+            else {
+                return failure();
+            }
+        }
+    };
+
+    template <typename PredFwd>
+    filter(PredFwd&&) -> filter<std::decay_t<PredFwd>>;
+
 } /* namespace cppcmb */
 
 /**
