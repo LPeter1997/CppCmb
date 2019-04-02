@@ -36,7 +36,7 @@ static_assert(__VA_ARGS__, "Concept assertion " #__VA_ARGS__ " failed!")
 template <cppcmb_requires_t(__VA_ARGS__)>
 
 #define cppcmb_requires_t(...) \
-cppcmb_prelude_requires_t1(cppcmb_unique_id(concept_req), __VA_ARGS__)
+cppcmb_prelude_requires_t1(cppcmb_unique_id(cppcmb_concept_req), __VA_ARGS__)
 
 #define cppcmb_return(...) \
 noexcept(noexcept(__VA_ARGS__)) -> decltype(__VA_ARGS__) { return __VA_ARGS__; }
@@ -1475,13 +1475,75 @@ static_assert(                                        \
     [[nodiscard]] constexpr auto operator-(P&& p)
         cppcmb_return(opt_t(cppcmb_fwd(p)));
 
+    /**
+     * A "wrapper" parser. Does nothing, just calls a cppcmb_parse_rule method
+     * with itself. Used to implement recursion.
+     */
+    template <typename Val, typename Tag>
+    class rule_t : public combinator<rule_t<Val, Tag>> {
+    public:
+        using tag_type = Tag;
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+            -> result<Val> {
+            return cppcmb_parse_rule(*this, r);
+        }
+    };
+
+    namespace detail {
+
+        // XXX(LPeter1997): Can this be constexpr?
+        /**
+         * This is where all the rules are stored internally.
+         * They allow us to do a nice assignment-syntax.
+         */
+        template <typename>
+        inline constexpr auto rule_set = 0;
+
+        template <typename, typename U>
+        struct second {
+            using type = U;
+        };
+
+    } /* namespace detail */
+
+    /**
+     * A library macro that actually gets published.
+     * Used to declare rules.
+     */
+    #define cppcmb_decl(name, ...) \
+    auto const name =              \
+    ::cppcmb::rule_t<__VA_ARGS__, struct cppcmb_unique_id(cppcmb_rule_tag)>()
+
+    // XXX(LPeter1997): Noexcept specifier?
+    /**
+     * A library macro that actually gets published.
+     * Used to define rules.
+     */
+    #define cppcmb_def(name)                                            \
+    template <typename Src>                                             \
+    [[nodiscard]] constexpr auto                                        \
+    cppcmb_parse_rule(decltype(name), ::cppcmb::reader<Src> const& r) { \
+        using tag_type = typename decltype(name)::tag_type;             \
+        auto const& p = ::cppcmb::detail::rule_set<                     \
+            typename ::cppcmb::detail::second<Src, tag_type>::type      \
+        >;                                                              \
+        return p.apply(r);                                              \
+    }                                                                   \
+    template <>                                                         \
+    inline constexpr auto                                               \
+    ::cppcmb::detail::rule_set<typename decltype(name)::tag_type>
+
 } /* namespace cppcmb */
 
 /**
  * Detail macro undefines.
  */
 #undef cppcmb_prelude_requires_t1
-#undef cppcmb_prelude_cat
+// Sadly we have to leak these...
+// #undef cppcmb_prelude_cat
 
 /**
  * Library macro undefines.
@@ -1492,7 +1554,8 @@ static_assert(                                        \
 #undef cppcmb_requires
 #undef cppcmb_assert_concept
 #undef cppcmb_fwd
-#undef cppcmb_unique_id
-#undef cppcmb_cat
+// Sadly we have to leak these...
+//#undef cppcmb_unique_id
+//#undef cppcmb_cat
 
 #endif /* CPPCMB_HPP */
