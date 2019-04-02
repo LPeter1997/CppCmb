@@ -184,13 +184,13 @@ namespace cppcmb {
         reader(Src const&& src) = delete;
 
         [[nodiscard]] constexpr auto source() const
-            cppcmb_return(*m_Source);
+            cppcmb_return(*m_Source)
 
         [[nodiscard]] constexpr auto cursor() const
-            cppcmb_return(m_Cursor);
+            cppcmb_return(m_Cursor)
 
         [[nodiscard]] constexpr auto is_end() const
-            cppcmb_return(m_Cursor >= std::size(*m_Source));
+            cppcmb_return(m_Cursor >= std::size(*m_Source))
 
         [[nodiscard]] constexpr auto const& current() const noexcept {
             cppcmb_assert(
@@ -240,16 +240,16 @@ namespace cppcmb {
         }
 
         [[nodiscard]] constexpr auto value() &
-            cppcmb_return(m_Value);
+            cppcmb_return(m_Value)
         [[nodiscard]] constexpr auto value() const&
-            cppcmb_return(m_Value);
+            cppcmb_return(m_Value)
         [[nodiscard]] constexpr auto value() &&
-            cppcmb_return(std::move(m_Value));
+            cppcmb_return(std::move(m_Value))
         [[nodiscard]] constexpr auto value() const&&
-            cppcmb_return(std::move(m_Value));
+            cppcmb_return(std::move(m_Value))
 
         [[nodiscard]] constexpr auto remaining() const
-            cppcmb_return(m_Remaining);
+            cppcmb_return(m_Remaining)
     };
 
     template <typename TFwd>
@@ -272,7 +272,7 @@ namespace cppcmb {
         }
 
         [[nodiscard]] constexpr auto furthest() const
-            cppcmb_return(m_Furthest);
+            cppcmb_return(m_Furthest)
     };
 
     namespace detail {
@@ -311,28 +311,28 @@ namespace cppcmb {
         }
 
         [[nodiscard]] constexpr auto is_success() const
-            cppcmb_return(std::holds_alternative<success_type>(m_Data));
+            cppcmb_return(std::holds_alternative<success_type>(m_Data))
 
         [[nodiscard]] constexpr auto is_failure() const
-            cppcmb_return(std::holds_alternative<failure_type>(m_Data));
+            cppcmb_return(std::holds_alternative<failure_type>(m_Data))
 
         [[nodiscard]] constexpr auto success() &
-            cppcmb_return(std::get<success_type>(m_Data));
+            cppcmb_return(std::get<success_type>(m_Data))
         [[nodiscard]] constexpr auto success() const&
-            cppcmb_return(std::get<success_type>(m_Data));
+            cppcmb_return(std::get<success_type>(m_Data))
         [[nodiscard]] constexpr auto success() &&
-            cppcmb_return(std::get<success_type>(std::move(m_Data)));
+            cppcmb_return(std::get<success_type>(std::move(m_Data)))
         [[nodiscard]] constexpr auto success() const&&
-            cppcmb_return(std::get<success_type>(std::move(m_Data)));
+            cppcmb_return(std::get<success_type>(std::move(m_Data)))
 
         [[nodiscard]] constexpr auto failure() &
-            cppcmb_return(std::get<failure_type>(m_Data));
+            cppcmb_return(std::get<failure_type>(m_Data))
         [[nodiscard]] constexpr auto failure() const&
-            cppcmb_return(std::get<failure_type>(m_Data));
+            cppcmb_return(std::get<failure_type>(m_Data))
         [[nodiscard]] constexpr auto failure() &&
-            cppcmb_return(std::get<failure_type>(std::move(m_Data)));
+            cppcmb_return(std::get<failure_type>(std::move(m_Data)))
         [[nodiscard]] constexpr auto failure() const&&
-            cppcmb_return(std::get<failure_type>(std::move(m_Data)));
+            cppcmb_return(std::get<failure_type>(std::move(m_Data)))
     };
 
     namespace detail {
@@ -381,25 +381,25 @@ namespace cppcmb {
 
         template <std::size_t Idx>
         [[nodiscard]] constexpr auto get() &
-            cppcmb_return(std::get<Idx>(m_Value));
+            cppcmb_return(std::get<Idx>(m_Value))
         template <std::size_t Idx>
         [[nodiscard]] constexpr auto get() const&
-            cppcmb_return(std::get<Idx>(m_Value));
+            cppcmb_return(std::get<Idx>(m_Value))
         template <std::size_t Idx>
         [[nodiscard]] constexpr auto get() &&
-            cppcmb_return(std::get<Idx>(std::move(m_Value)));
+            cppcmb_return(std::get<Idx>(std::move(m_Value)))
         template <std::size_t Idx>
         [[nodiscard]] constexpr auto get() const&&
-            cppcmb_return(std::get<Idx>(std::move(m_Value)));
+            cppcmb_return(std::get<Idx>(std::move(m_Value)))
 
         [[nodiscard]] constexpr auto as_tuple() &
-            cppcmb_return(m_Value);
+            cppcmb_return(m_Value)
         [[nodiscard]] constexpr auto as_tuple() const&
-            cppcmb_return(m_Value);
+            cppcmb_return(m_Value)
         [[nodiscard]] constexpr auto as_tuple() &&
-            cppcmb_return(std::move(m_Value));
+            cppcmb_return(std::move(m_Value))
         [[nodiscard]] constexpr auto as_tuple() const&&
-            cppcmb_return(std::move(m_Value));
+            cppcmb_return(std::move(m_Value))
     };
 
     template <typename... Ts>
@@ -410,12 +410,12 @@ namespace cppcmb {
         // Base-case for sizeof...(Ts) != 1
         template <typename... Ts>
         [[nodiscard]] constexpr auto product_values_impl(product<Ts...>&& res)
-            cppcmb_return(std::move(res));
+            cppcmb_return(std::move(res))
 
         // Base-case for exactly one element
         template <typename T>
         [[nodiscard]] constexpr auto product_values_impl(product<T>&& res)
-            cppcmb_return(std::move(res).template get<0>());
+            cppcmb_return(std::move(res).template get<0>())
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
@@ -431,7 +431,7 @@ namespace cppcmb {
                 std::move(res),
                 cppcmb_fwd(h).template get<Is>()...,
                 cppcmb_fwd(t)...
-            ));
+            ))
 
         template <std::size_t... Is,
             typename... Ts, typename Head, typename... Tail>
@@ -444,7 +444,7 @@ namespace cppcmb {
                     std::move(res).template get<Is>()..., cppcmb_fwd(h)
                 ),
                 cppcmb_fwd(t)...
-            ));
+            ))
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto product_values_head(
@@ -455,7 +455,7 @@ namespace cppcmb {
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
-            ));
+            ))
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto product_values_head(
@@ -466,7 +466,7 @@ namespace cppcmb {
                 std::move(res),
                 cppcmb_fwd(h),
                 cppcmb_fwd(t)...
-            ));
+            ))
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
@@ -489,7 +489,7 @@ namespace cppcmb {
         cppcmb_return(
             // XXX(LPeter1997): Bug in GCC?
             detail::product_values_impl(product<>(), cppcmb_fwd(vs)...)
-        );
+        )
 
     namespace detail {
 
@@ -524,25 +524,25 @@ namespace cppcmb {
 
         template <typename U>
         [[nodiscard]] constexpr auto get() &
-            cppcmb_return(std::get<U>(m_Value));
+            cppcmb_return(std::get<U>(m_Value))
         template <typename U>
         [[nodiscard]] constexpr auto get() const&
-            cppcmb_return(std::get<U>(m_Value));
+            cppcmb_return(std::get<U>(m_Value))
         template <typename U>
         [[nodiscard]] constexpr auto get() &&
-            cppcmb_return(std::get<U>(std::move(m_Value)));
+            cppcmb_return(std::get<U>(std::move(m_Value)))
         template <typename U>
         [[nodiscard]] constexpr auto get() const&&
-            cppcmb_return(std::get<U>(std::move(m_Value)));
+            cppcmb_return(std::get<U>(std::move(m_Value)))
 
         [[nodiscard]] constexpr auto as_variant() &
-            cppcmb_return(m_Value);
+            cppcmb_return(m_Value)
         [[nodiscard]] constexpr auto as_variant() const&
-            cppcmb_return(m_Value);
+            cppcmb_return(m_Value)
         [[nodiscard]] constexpr auto as_variant() &&
-            cppcmb_return(std::move(m_Value));
+            cppcmb_return(std::move(m_Value))
         [[nodiscard]] constexpr auto as_variant() const&&
-            cppcmb_return(std::move(m_Value));
+            cppcmb_return(std::move(m_Value))
     };
 
     namespace detail {
@@ -589,7 +589,7 @@ namespace cppcmb {
 
         template <typename RetT, typename T>
         constexpr auto sum_values_impl(std::false_type, T&& val)
-            cppcmb_return(RetT(cppcmb_fwd(val)));
+            cppcmb_return(RetT(cppcmb_fwd(val)))
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename RetT, typename T>
@@ -607,7 +607,7 @@ namespace cppcmb {
         cppcmb_return(detail::sum_values_impl<sum_values_t<Ts...>>(
             detail::is_sum<detail::remove_cvref_t<T>>(),
             cppcmb_fwd(val)
-        ));
+        ))
 
     namespace detail {
 
@@ -619,7 +619,7 @@ namespace cppcmb {
             Fn&& fn, T&& arg)
             cppcmb_return(std::apply(
                 cppcmb_fwd(fn), cppcmb_fwd(arg).as_tuple()
-            ));
+            ))
 
         // Arg is a sum
         template <typename Fn, typename T>
@@ -629,7 +629,7 @@ namespace cppcmb {
             Fn&& fn, T&& arg)
             cppcmb_return(std::visit(
                 cppcmb_fwd(fn), cppcmb_fwd(arg).as_variant()
-            ));
+            ))
 
         // Arg is a single value
         template <typename Fn, typename T>
@@ -637,7 +637,7 @@ namespace cppcmb {
             std::false_type,
             std::false_type,
             Fn&& fn, T&& arg)
-            cppcmb_return(cppcmb_fwd(fn)(cppcmb_fwd(arg)));
+            cppcmb_return(cppcmb_fwd(fn)(cppcmb_fwd(arg)))
 
     } /* namespace detail */
 
@@ -650,7 +650,7 @@ namespace cppcmb {
                 cppcmb_fwd(fn),
                 cppcmb_fwd(arg)
             )
-        );
+        )
 
     namespace detail {
 
@@ -878,7 +878,7 @@ static_assert(                                        \
         // Invoke the function with a value
         template <typename T>
         [[nodiscard]] constexpr auto apply_fn(T&& val) const
-            cppcmb_return(apply_value(m_Fn, cppcmb_fwd(val)));
+            cppcmb_return(apply_value(m_Fn, cppcmb_fwd(val)))
     };
 
     template <typename PFwd, typename FnFwd>
@@ -1004,7 +1004,7 @@ static_assert(                                        \
     template <typename P1, typename P2,
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
     [[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
-        cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
+        cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
     /**
      * A tag-type for a more uniform alternative syntax.
@@ -1100,7 +1100,7 @@ static_assert(                                        \
     template <typename P1, typename P2,
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
     [[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2)
-        cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
+        cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
     /**
      * Ignore pass.
@@ -1108,7 +1108,7 @@ static_assert(                                        \
     template <typename P2,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
     [[nodiscard]] constexpr auto operator|(pass_t, P2&& p2)
-        cppcmb_return(cppcmb_fwd(p2));
+        cppcmb_return(cppcmb_fwd(p2))
 
     /**
      * A parser that tries all alternatives and then returns the furthest
@@ -1211,7 +1211,7 @@ static_assert(                                        \
     template <typename P1, typename P2,
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
     [[nodiscard]] constexpr auto operator||(P1&& p1, P2&& p2)
-        cppcmb_return(eager_alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)));
+        cppcmb_return(eager_alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
     /**
      * Ignore pass.
@@ -1219,7 +1219,7 @@ static_assert(                                        \
     template <typename P2,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
     [[nodiscard]] constexpr auto operator||(pass_t, P2&& p2)
-        cppcmb_return(cppcmb_fwd(p2));
+        cppcmb_return(cppcmb_fwd(p2))
 
     /**
      * A type-pack that describes a collection except it's type.
@@ -1282,25 +1282,25 @@ static_assert(                                        \
 
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) &
-            cppcmb_return(many_t<P, To2>(m_Parser));
+            cppcmb_return(many_t<P, To2>(m_Parser))
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) const&
-            cppcmb_return(many_t<P, To2>(m_Parser));
+            cppcmb_return(many_t<P, To2>(m_Parser))
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) &&
-            cppcmb_return(many_t<P, To2>(std::move(m_Parser)));
+            cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) const&&
-            cppcmb_return(many_t<P, To2>(std::move(m_Parser)));
+            cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
 
         [[nodiscard]] constexpr auto underlying() &
-            cppcmb_return(m_Parser);
+            cppcmb_return(m_Parser)
         [[nodiscard]] constexpr auto underlying() const&
-            cppcmb_return(m_Parser);
+            cppcmb_return(m_Parser)
         [[nodiscard]] constexpr auto underlying() &&
-            cppcmb_return(std::move(m_Parser));
+            cppcmb_return(std::move(m_Parser))
         [[nodiscard]] constexpr auto underlying() const&&
-            cppcmb_return(std::move(m_Parser));
+            cppcmb_return(std::move(m_Parser))
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
@@ -1335,7 +1335,7 @@ static_assert(                                        \
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
     [[nodiscard]] constexpr auto operator*(P&& p)
-        cppcmb_return(many_t(cppcmb_fwd(p)));
+        cppcmb_return(many_t(cppcmb_fwd(p)))
     /**
      * A parser that applies a parser as many times as it can, before it fails.
      * Only succeeds if the parser could be applied at least once.
@@ -1363,16 +1363,16 @@ static_assert(                                        \
 
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) &
-            cppcmb_return(many1_t<P, To2>(m_Parser.underlying()));
+            cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) const&
-            cppcmb_return(many1_t<P, To2>(m_Parser.underlying()));
+            cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) &&
-            cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()));
+            cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
         template <typename To2>
         [[nodiscard]] constexpr auto collect_to(To2) const&&
-            cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()));
+            cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
@@ -1408,7 +1408,7 @@ static_assert(                                        \
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
     [[nodiscard]] constexpr auto operator+(P&& p)
-        cppcmb_return(many1_t(cppcmb_fwd(p)));
+        cppcmb_return(many1_t(cppcmb_fwd(p)))
 
     /**
      * Operator to collect 'many' and 'many1' to a different container.
@@ -1416,7 +1416,7 @@ static_assert(                                        \
     template <typename P, typename To,
         cppcmb_requires_t(detail::is_many_v<detail::remove_cvref_t<P>>)>
     [[nodiscard]] constexpr auto operator>>(P&& p, To to)
-        cppcmb_return(cppcmb_fwd(p).collect_to(to));
+        cppcmb_return(cppcmb_fwd(p).collect_to(to))
 
     /**
      * A parser that wraps the underlying parse result into a maybe-type.
@@ -1473,7 +1473,7 @@ static_assert(                                        \
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
     [[nodiscard]] constexpr auto operator-(P&& p)
-        cppcmb_return(opt_t(cppcmb_fwd(p)));
+        cppcmb_return(opt_t(cppcmb_fwd(p)))
 
     /**
      * A "wrapper" parser. Does nothing, just calls a cppcmb_parse_rule method
