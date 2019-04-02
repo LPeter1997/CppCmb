@@ -415,7 +415,7 @@ namespace cppcmb {
         // Base-case for exactly one element
         template <typename T>
         [[nodiscard]] constexpr auto product_values_impl(product<T>&& res)
-            cppcmb_return(std::get<0>(std::move(res)));
+            cppcmb_return(std::move(res).template get<0>());
 
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
@@ -1547,6 +1547,10 @@ static_assert(                                        \
     template <typename Pred>
     class filter {
     private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, filter>;
+
         template <typename... Ts>
         using value_t = decltype(product_values(
             std::declval<Ts>()...
@@ -1556,14 +1560,15 @@ static_assert(                                        \
 
     public:
         // XXX(LPeter1997): Noexcept specifier
-        template <typename PredFwd>
+        template <typename PredFwd,
+            cppcmb_requires_t(!is_self_v<PredFwd>)>
         constexpr filter(PredFwd&& pred)
             : m_Predicate(cppcmb_fwd(pred)) {
         }
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename... Ts>
-        constexpr auto operator()(Ts&&... args) const
+        [[nodiscard]] constexpr auto operator()(Ts&&... args) const
             -> result<value_t<Ts&&...>> {
             static_assert(
                 std::is_invocable_v<Pred, Ts&&...>,
@@ -1586,6 +1591,24 @@ static_assert(                                        \
 
     template <typename PredFwd>
     filter(PredFwd&&) -> filter<std::decay_t<PredFwd>>;
+
+    /**
+     * Selects some elements from a product.
+     */
+    template <std::size_t... Ns>
+    class select_t {
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename... Ts>
+        [[nodiscard]] constexpr decltype(auto) operator()(Ts&&... args) const {
+            return product_values(
+                std::get<Ns>(std::tuple(cppcmb_fwd(args)...))...
+            );
+        }
+    };
+
+    template <std::size_t... Ns>
+    inline constexpr auto select = select_t<Ns...>();
 
 } /* namespace cppcmb */
 
