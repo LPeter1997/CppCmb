@@ -641,6 +641,8 @@ namespace cppcmb {
 
     } /* namespace detail */
 
+    // XXX(LPeter1997): Make apply recursive, so that underlying sums or
+    // products can get unwrapped too
     template <typename Fn, typename T>
     [[nodiscard]] constexpr auto apply_value(Fn&& fn, T&& arg)
         cppcmb_return(
