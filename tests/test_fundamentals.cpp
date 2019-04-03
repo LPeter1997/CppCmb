@@ -1,9 +1,14 @@
 #include <string_view>
+#include <type_traits>
 #include <vector>
 #include "catch.hpp"
 #include "../cppcmb.hpp"
 
 namespace pc = cppcmb;
+
+template <typename T, typename U>
+inline constexpr bool same_type_v =
+	std::is_same_v<std::decay_t<T>, std::decay_t<U>>;
 
 TEST_CASE("'one' returns a character if there is one", "[one]") {
 	auto p = pc::one;
@@ -25,5 +30,28 @@ TEST_CASE("'one' returns a character if there is one", "[one]") {
 		REQUIRE(res.is_failure());
 		auto f = res.failure();
 		REQUIRE(f.furthest() == 0);
+	}
+}
+
+TEST_CASE("'end' succeeds is there is nothing to consume", "[end]") {
+	auto p = pc::end;
+
+	SECTION("there is a character to consume") {
+		std::string_view src = "aaa";
+		auto res = p.apply(pc::reader(src));
+
+		REQUIRE(res.is_failure());
+		auto f = res.failure();
+		REQUIRE(f.furthest() == 0);
+	}
+
+	SECTION("there is no character to consume") {
+		std::string_view src = "";
+		auto res = p.apply(pc::reader(src));
+
+		REQUIRE(res.is_success());
+		auto succ = res.success();
+		REQUIRE(succ.remaining() == 0);
+		REQUIRE(same_type_v<decltype(succ.value()), pc::product<>>);
 	}
 }
