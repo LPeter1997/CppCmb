@@ -9,12 +9,15 @@
 #ifndef CPPCMB_HPP
 #define CPPCMB_HPP
 
+#include <any>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -151,6 +154,7 @@ namespace cppcmb {
 
     } /* namespace detail */
 
+    class memo_table;
 
     /**
      * The structure that reads from the source element-wise.
@@ -167,18 +171,31 @@ namespace cppcmb {
     private:
         Src const*  m_Source;
         std::size_t m_Cursor;
+        memo_table* m_MemoTable = nullptr;
 
     public:
         using value_type =
             detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
-        constexpr reader(Src const& src) noexcept
-            : m_Source(std::addressof(src)), m_Cursor(0U) {
+        constexpr reader(
+            Src const& src, std::size_t idx, memo_table* t) noexcept
+            : m_Source(std::addressof(src)), m_Cursor(0U), m_MemoTable(t) {
+            seek(idx);
         }
 
-        constexpr reader(Src const& src, std::size_t idx) noexcept
-            : reader(src) {
-            seek(idx);
+        constexpr reader(
+            Src const& src, std::size_t idx, memo_table& t) noexcept
+            : reader(src, idx, &t) {
+        }
+
+        constexpr reader(
+            Src const& src, std::size_t idx = 0U) noexcept
+            : reader(src, idx, nullptr) {
+        }
+
+        constexpr reader(
+            Src const& src, memo_table& t) noexcept
+            : reader(src, 0U, t) {
         }
 
         reader(Src const&& src) = delete;
@@ -211,6 +228,14 @@ namespace cppcmb {
 
         constexpr void next() noexcept {
             seek(cursor() + 1);
+        }
+
+        [[nodiscard]] constexpr auto& memo() const noexcept {
+            cppcmb_assert(
+                "A memo-table must be assigned before accessing it!",
+                m_MemoTable != nullptr
+            );
+            return *m_MemoTable;
         }
     };
 
@@ -1006,7 +1031,7 @@ static_assert(                                        \
             // Get the success alternative
             auto p1_succ = std::move(p1_inv).success();
             // Create the next reader
-            auto r2 = reader(r.source(), p1_succ.remaining());
+            auto r2 = reader(r.source(), p1_succ.remaining(), r.memo());
             // Invoke the second parser
             auto p2_inv = m_Second.apply(r2);
             if (p2_inv.is_failure()) {
@@ -1534,7 +1559,7 @@ static_assert(                                        \
          * They allow us to do a nice assignment-syntax.
          */
         template <typename>
-        inline constexpr auto rule_set = 0;
+        inline /* constexpr */ auto rule_set = 0;
 
         template <typename, typename U>
         struct second {
@@ -1567,8 +1592,135 @@ static_assert(                                        \
         return p.apply(r);                                              \
     }                                                                   \
     template <>                                                         \
-    inline constexpr auto                                               \
+    inline /* constexpr */ auto                                         \
     ::cppcmb::detail::rule_set<typename decltype(name)::tag_type>
+
+    namespace detail {
+
+        /**
+         * Functionality for hashing a pair. Straight from Boost.
+         */
+        template <typename T>
+        constexpr void hash_combine(std::size_t& seed, T const& v) {
+            seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+
+        struct pair_hasher {
+            template <typename T1, typename T2>
+            constexpr auto operator()(std::pair<T1, T2> const& p) const {
+                std::size_t seed = 0;
+                hash_combine(seed, p.first);
+                hash_combine(seed, p.second);
+                return seed;
+            }
+        };
+
+    } /* namespace detail */
+
+    /**
+     * Memorization table for packrat parsers.
+     */
+    class memo_table {
+    private:
+        // pair<parser identifier, position>
+        using key_type = std::pair<std::uintptr_t, std::size_t>;
+        using value_type = std::any;
+
+        std::unordered_map<
+            key_type,
+            value_type,
+            detail::pair_hasher
+        > m_Cache;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P>
+        [[nodiscard]]
+        constexpr std::any* get(P const* parser, std::size_t pos) {
+            auto it = m_Cache.find({ parser->original_id(), pos });
+            if (it == m_Cache.end()) {
+                return nullptr;
+            }
+            return &it->second;
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P, typename Src>
+        [[nodiscard]]
+        constexpr std::any* get(P const* parser, reader<Src> const& r) {
+            return get(parser, r.cursor());
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P, typename TFwd>
+        constexpr std::any* put(P const* parser, std::size_t pos, TFwd&& val) {
+            return &(m_Cache[{ parser->original_id(), pos }] = cppcmb_fwd(val));
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename P, typename Src, typename TFwd>
+        constexpr std::any*
+        put(P const* parser, reader<Src> const& r, TFwd&& val) {
+            return put(parser, r.cursor(), cppcmb_fwd(val));
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        /* constexpr */ void clear() {
+            m_Cache.clear();
+        }
+    };
+
+    /**
+     * A memorizing parser to avoid duplicate application.
+     */
+    template <typename P>
+    class packrat_t : public combinator<packrat_t<P>> {
+    private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, packrat_t>;
+
+        P m_Parser;
+        std::uintptr_t m_ID;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
+        constexpr packrat_t(PFwd&& p)
+            : m_Parser(cppcmb_fwd(p)),
+            m_ID(reinterpret_cast<std::uintptr_t>(this)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]]
+        constexpr decltype(auto) apply(reader<Src> const& r) const {
+            cppcmb_assert_parser(P, Src);
+
+            using apply_t = detail::remove_cvref_t<decltype(m_Parser.apply(r))>;
+            auto& table = r.memo();
+
+            auto* entry = table.get(this, r);
+            if (entry == nullptr) {
+                entry = table.put(this, r, m_Parser.apply(r));
+            }
+            return std::any_cast<apply_t>(*entry);
+        }
+
+        [[nodiscard]] constexpr auto original_id() const
+            cppcmb_return(m_ID)
+    };
+
+    template <typename PFwd>
+    packrat_t(PFwd&&) -> packrat_t<detail::remove_cvref_t<PFwd>>;
+
+    /**
+     * Wrapper to make any combinator a packrat parser.
+     */
+    template <typename PFwd>
+    [[nodiscard]] constexpr auto memo(PFwd&& p)
+        cppcmb_return(packrat_t(cppcmb_fwd(p)))
 
     /**
      * Some helper functionalities for the action combinator.
