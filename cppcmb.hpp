@@ -369,14 +369,14 @@ namespace cppcmb {
         template <typename T,
             cppcmb_requires_t(!is_self_v<T>)>
         constexpr product(T&& val)
-            : m_Value(std::make_tuple(cppcmb_fwd(val))) {
+            : m_Value(cppcmb_fwd(val)) {
         }
 
         // XXX(LPeter1997): Exception specifier?
         template <typename... Us,
             cppcmb_requires_t(sizeof...(Us) != 1)>
         constexpr product(Us&&... vals)
-            : m_Value(std::make_tuple(cppcmb_fwd(vals)...)) {
+            : m_Value(cppcmb_fwd(vals)...) {
         }
 
         template <std::size_t Idx>
@@ -405,12 +405,29 @@ namespace cppcmb {
     template <typename... Ts>
     product(Ts&&...) -> product<detail::remove_cvref_t<Ts>...>;
 
+    /**
+     * Make products comparable.
+     */
+    template <typename... Ts, typename... Us>
+    [[nodiscard]] constexpr auto operator==(
+        product<Ts...> const& l,
+        product<Us...> const& r)
+        cppcmb_return(l.as_tuple() == r.as_tuple())
+
+    template <typename... Ts, typename... Us>
+    [[nodiscard]] constexpr auto operator!=(
+        product<Ts...> const& l,
+        product<Us...> const& r)
+        cppcmb_return(l.as_tuple() != r.as_tuple())
+
     namespace detail {
 
         // Base-case for sizeof...(Ts) != 1
         template <typename... Ts>
-        [[nodiscard]] constexpr auto product_values_impl(product<Ts...>&& res)
-            cppcmb_return(std::move(res))
+        [[nodiscard]]
+        constexpr auto product_values_impl(product<Ts...>&& res) noexcept {
+            return res;
+        }
 
         // Base-case for exactly one element
         template <typename T>
@@ -544,6 +561,21 @@ namespace cppcmb {
         [[nodiscard]] constexpr auto as_variant() const&&
             cppcmb_return(std::move(m_Value))
     };
+
+    /**
+     * Make sums comparable.
+     */
+    template <typename... Ts>
+    [[nodiscard]] constexpr auto operator==(
+        sum<Ts...> const& l,
+        sum<Ts...> const& r)
+        cppcmb_return(l.as_variant() == r.as_variant())
+
+    template <typename... Ts>
+    [[nodiscard]] constexpr auto operator!=(
+        sum<Ts...> const& l,
+        sum<Ts...> const& r)
+        cppcmb_return(l.as_variant() != r.as_variant())
 
     namespace detail {
 

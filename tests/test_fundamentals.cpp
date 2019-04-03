@@ -164,6 +164,8 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 			REQUIRE(res.is_success());
 			auto succ = res.success();
 			REQUIRE(same_type_v<decltype(succ.value()), pc::product<char, char, char>>);
+			// XXX(LPeter1997): GCC bug?
+			REQUIRE(succ.value() == pc::product<char, char, char>('a', 'b', 'c'));
 			REQUIRE(succ.remaining() == 3);
 		}
 	}
