@@ -1818,25 +1818,7 @@ static_assert(                                        \
                 : m_Value(cppcmb_fwd(val)) {
             }
 
-            // XXX(LPeter1997): Why isn't the cppcmb_return returning an lvalue
-            // here? That's why it's manually written...
-
-            // XXX(LPeter1997): Noexcept specifier
-            [[nodiscard]] constexpr auto& value() & {
-                return m_Value;
-            }
-            // XXX(LPeter1997): Noexcept specifier
-            [[nodiscard]] constexpr auto const& value() const& {
-                return m_Value;
-            }
-            // XXX(LPeter1997): Noexcept specifier
-            [[nodiscard]] constexpr auto&& value() && {
-                return std::move(m_Value);
-            }
-            // XXX(LPeter1997): Noexcept specifier
-            [[nodiscard]] constexpr auto const&& value() const&& {
-                return std::move(m_Value);
-            }
+            cppcmb_getter(value, m_Value)
         };
 
     } /* namespace detail */
