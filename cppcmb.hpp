@@ -53,19 +53,26 @@ cppcmb_assert("Unreachable code!", false)
 #define cppcmb_noexcept(...) \
 noexcept(noexcept(__VA_ARGS__))
 
-#define cppcmb_getter(name, ...)                               \
-[[nodiscard]] constexpr auto& name() & noexcept {              \
-    return __VA_ARGS__;                                        \
-}                                                              \
-[[nodiscard]] constexpr auto const& name() const& noexcept {   \
-    return __VA_ARGS__;                                        \
-}                                                              \
-[[nodiscard]] constexpr auto&& name() && noexcept {            \
-    return std::move(__VA_ARGS__);                             \
-}                                                              \
-[[nodiscard]] constexpr auto const&& name() const&& noexcept { \
-    return std::move(__VA_ARGS__);                             \
+#define cppcmb_getter(name, ...)                                     \
+[[nodiscard]]                                                        \
+constexpr auto& name() & cppcmb_noexcept(__VA_ARGS__) {              \
+    return __VA_ARGS__;                                              \
+}                                                                    \
+[[nodiscard]]                                                        \
+constexpr auto const& name() const& cppcmb_noexcept(__VA_ARGS__) {   \
+    return __VA_ARGS__;                                              \
+}                                                                    \
+[[nodiscard]]                                                        \
+constexpr auto&& name() && cppcmb_noexcept(__VA_ARGS__) {            \
+    return std::move(__VA_ARGS__);                                   \
+}                                                                    \
+[[nodiscard]]                                                        \
+constexpr auto const&& name() const&& cppcmb_noexcept(__VA_ARGS__) { \
+    return std::move(__VA_ARGS__);                                   \
 }
+
+#define cppcmb_self_check(type) \
+cppcmb_prelude_self_check(type, cppcmb_unique_id(cppcmb_self_type))
 
 /**
  * Macro details.
@@ -75,6 +82,11 @@ noexcept(noexcept(__VA_ARGS__))
 #define cppcmb_prelude_requires_t1(id, ...) 						\
 bool id = false,                                                    \
 ::std::enable_if_t<id || (__VA_ARGS__), ::std::nullptr_t> = nullptr
+
+#define cppcmb_prelude_self_check(type, id)                       \
+template <typename id>                                            \
+static constexpr bool is_self_v =                                 \
+    ::std::is_same_v<::cppcmb::detail::remove_cvref_t<id>, type>
 
 // XXX(LPeter1997): Probably a good idea to get rid of that return macro...
 // For members at least, as it doesn't return by ref.
@@ -197,7 +209,7 @@ namespace cppcmb {
     private:
         Src const*  m_Source;
         std::size_t m_Cursor;
-        memo_table* m_MemoTable = nullptr;
+        memo_table* m_MemoTable;
 
     public:
         using value_type =
@@ -205,7 +217,7 @@ namespace cppcmb {
 
         constexpr reader(
             Src const& src, std::size_t idx, memo_table* t) noexcept
-            : m_Source(std::addressof(src)), m_Cursor(0U), m_MemoTable(t) {
+            : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoTable(t) {
             seek(idx);
         }
 
@@ -224,6 +236,7 @@ namespace cppcmb {
             : reader(src, 0U, t) {
         }
 
+        // Just to avoid nasty bugs
         reader(Src const&& src, std::size_t idx, memo_table* t) = delete;
 
         [[nodiscard]] constexpr auto const& source() const noexcept {
@@ -282,9 +295,7 @@ namespace cppcmb {
         using value_type = T;
 
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, success>;
+        cppcmb_self_check(success);
 
         value_type  m_Value;
         std::size_t m_Remaining;
@@ -293,7 +304,7 @@ namespace cppcmb {
         template <typename TFwd,
             cppcmb_requires_t(!is_self_v<TFwd>)>
         constexpr success(TFwd&& val, std::size_t rem = 0)
-            noexcept(noexcept(cppcmb_fwd(val)))
+            noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
             : m_Value(cppcmb_fwd(val)), m_Remaining(rem) {
         }
 
@@ -350,16 +361,17 @@ namespace cppcmb {
         using failure_type = ::cppcmb::failure;
 
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, result>;
+        cppcmb_self_check(result);
 
-        std::variant<success_type, failure_type> m_Data;
+        using either_type = std::variant<success_type, failure_type>;
+
+        either_type m_Data;
 
     public:
         template <typename TFwd,
             cppcmb_requires_t(!is_self_v<TFwd>)>
-        constexpr result(TFwd&& val) noexcept(noexcept(cppcmb_fwd(val)))
+        constexpr result(TFwd&& val)
+            noexcept(std::is_nothrow_constructible_v<either_type, TFwd&&>)
             : m_Data(cppcmb_fwd(val)) {
         }
 
@@ -395,20 +407,18 @@ namespace cppcmb {
     private:
         using tuple_type = decltype(std::make_tuple(std::declval<Ts>()...));
 
-        tuple_type m_Value;
+        cppcmb_self_check(product);
 
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, product>;
+        tuple_type m_Value;
 
     public:
         static constexpr auto index_sequence =
             std::make_index_sequence<sizeof...(Ts)>();
 
-        // XXX(LPeter1997): Exception specifier?
         template <typename T,
             cppcmb_requires_t(!is_self_v<T>)>
         constexpr product(T&& val)
+            noexcept(std::is_nothrow_constructible_v<tuple_type, T&&>)
             : m_Value(cppcmb_fwd(val)) {
         }
 
@@ -2077,6 +2087,7 @@ static_assert(                                        \
 /**
  * Detail macro undefines.
  */
+#undef cppcmb_prelude_self_check
 #undef cppcmb_prelude_requires_t1
 // Sadly we have to leak these...
 // #undef cppcmb_prelude_cat
@@ -2084,6 +2095,7 @@ static_assert(                                        \
 /**
  * Library macro undefines.
  */
+#undef cppcmb_self_check
 #undef cppcmb_getter
 #undef cppcmb_noexcept
 #undef cppcmb_unreachable
