@@ -230,6 +230,9 @@ namespace cppcmb {
             seek(cursor() + 1);
         }
 
+        [[nodiscard]] constexpr auto memo_ptr() const
+            cppcmb_return(m_MemoTable);
+
         [[nodiscard]] constexpr auto& memo() const noexcept {
             cppcmb_assert(
                 "A memo-table must be assigned before accessing it!",
@@ -1039,7 +1042,7 @@ static_assert(                                        \
             // Get the success alternative
             auto p1_succ = std::move(p1_inv).success();
             // Create the next reader
-            auto r2 = reader(r.source(), p1_succ.remaining(), r.memo());
+            auto r2 = reader(r.source(), p1_succ.remaining(), r.memo_ptr());
             // Invoke the second parser
             auto p2_inv = m_Second.apply(r2);
             if (p2_inv.is_failure()) {
@@ -1642,10 +1645,9 @@ static_assert(                                        \
 
     public:
         // XXX(LPeter1997): Noexcept specifier
-        template <typename P>
         [[nodiscard]]
-        constexpr std::any* get(P const* parser, std::size_t pos) {
-            auto it = m_Cache.find({ parser->original_id(), pos });
+        /* constexpr */ std::any* get(std::uintptr_t pid, std::size_t pos) {
+            auto it = m_Cache.find({ pid, pos });
             if (it == m_Cache.end()) {
                 return nullptr;
             }
@@ -1653,23 +1655,26 @@ static_assert(                                        \
         }
 
         // XXX(LPeter1997): Noexcept specifier
-        template <typename P, typename Src>
+        template <typename Src>
         [[nodiscard]]
-        constexpr std::any* get(P const* parser, reader<Src> const& r) {
-            return get(parser, r.cursor());
+        constexpr std::any* get(std::uintptr_t pid, reader<Src> const& r) {
+            return get(pid, r.cursor());
         }
 
         // XXX(LPeter1997): Noexcept specifier
-        template <typename P, typename TFwd>
-        constexpr std::any* put(P const* parser, std::size_t pos, TFwd&& val) {
-            return &(m_Cache[{ parser->original_id(), pos }] = cppcmb_fwd(val));
+        template <typename TFwd>
+        constexpr auto& put(std::uintptr_t pid, std::size_t pos, TFwd&& val) {
+            using raw_type = detail::remove_cvref_t<TFwd>;
+            auto id = std::pair(pid, pos);
+            auto& a = (m_Cache[id] = cppcmb_fwd(val));
+            return std::any_cast<raw_type&>(a);
         }
 
         // XXX(LPeter1997): Noexcept specifier
-        template <typename P, typename Src, typename TFwd>
-        constexpr std::any*
-        put(P const* parser, reader<Src> const& r, TFwd&& val) {
-            return put(parser, r.cursor(), cppcmb_fwd(val));
+        template <typename Src, typename TFwd>
+        constexpr auto&
+        put(std::uintptr_t pid, reader<Src> const& r, TFwd&& val) {
+            return put(pid, r.cursor(), cppcmb_fwd(val));
         }
 
         // XXX(LPeter1997): Noexcept specifier
@@ -1678,26 +1683,58 @@ static_assert(                                        \
         }
     };
 
+    namespace detail {
+
+        template <typename Self>
+        class packrat_base : public combinator<Self> {
+        private:
+            std::uintptr_t m_ID;
+
+        protected:
+            // XXX(LPeter1997): Noexcept specifier
+            constexpr packrat_base()
+                : m_ID(reinterpret_cast<std::uintptr_t>(this)) {
+            }
+
+            [[nodiscard]] constexpr auto original_id() const
+                cppcmb_return(m_ID)
+
+            // XXX(LPeter1997): Noexcept specifier
+            template <typename Src, typename TFwd>
+            constexpr auto& put_memo(reader<Src> const& r, TFwd&& val) const {
+                auto& table = r.memo();
+                return table.put(original_id(), r, cppcmb_fwd(val));
+            }
+
+            // XXX(LPeter1997): Noexcept specifier
+            template <typename Src>
+            [[nodiscard]]
+            constexpr std::any* get_memo(reader<Src> const& r) const {
+                auto& table = r.memo();
+                return table.get(original_id(), r);
+            }
+        };
+
+    } /* namespace detail */
+
     /**
      * A memorizing parser to avoid duplicate application.
      */
     template <typename P>
-    class packrat_t : public combinator<packrat_t<P>> {
+    class packrat_t : public detail::packrat_base<packrat_t<P>> {
     private:
         template <typename U>
         static constexpr bool is_self_v =
             std::is_same_v<detail::remove_cvref_t<U>, packrat_t>;
 
         P m_Parser;
-        std::uintptr_t m_ID;
 
     public:
         // XXX(LPeter1997): Noexcept specifier
         template <typename PFwd,
             cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr packrat_t(PFwd&& p)
-            : m_Parser(cppcmb_fwd(p)),
-            m_ID(reinterpret_cast<std::uintptr_t>(this)) {
+            : m_Parser(cppcmb_fwd(p)) {
         }
 
         // XXX(LPeter1997): Noexcept specifier
@@ -1707,17 +1744,15 @@ static_assert(                                        \
             cppcmb_assert_parser(P, Src);
 
             using apply_t = parser_result_t<P, Src>;
-            auto& table = r.memo();
 
-            auto* entry = table.get(this, r);
+            auto* entry = this->get_memo(r);
             if (entry == nullptr) {
-                entry = table.put(this, r, m_Parser.apply(r));
+                return this->put_memo(r, m_Parser.apply(r));
             }
-            return std::any_cast<apply_t>(*entry);
+            else {
+                return std::any_cast<apply_t&>(*entry);
+            }
         }
-
-        [[nodiscard]] constexpr auto original_id() const
-            cppcmb_return(m_ID)
     };
 
     template <typename PFwd>
