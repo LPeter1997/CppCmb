@@ -833,11 +833,19 @@ static_assert(                                        \
 )
 
     /**
+     * Helper to get the parser result.
+     */
+    template <typename P, typename Src>
+    using parser_result_t = detail::remove_cvref_t<decltype(
+        std::declval<P>().apply(std::declval<reader<Src> const&>())
+    )>;
+
+    /**
      * Helper to get the result value of a parse success.
      */
     template <typename P, typename Src>
     using parser_value_t = detail::remove_cvref_t<decltype(
-        std::declval<P>().apply(std::declval<reader<Src> const&>())
+        std::declval<parser_result_t<P, Src>>()
             .success().value()
     )>;
 
@@ -1698,7 +1706,7 @@ static_assert(                                        \
         constexpr decltype(auto) apply(reader<Src> const& r) const {
             cppcmb_assert_parser(P, Src);
 
-            using apply_t = detail::remove_cvref_t<decltype(m_Parser.apply(r))>;
+            using apply_t = parser_result_t<P, Src>;
             auto& table = r.memo();
 
             auto* entry = table.get(this, r);
