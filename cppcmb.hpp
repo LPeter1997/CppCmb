@@ -47,6 +47,9 @@ noexcept(noexcept(__VA_ARGS__)) -> decltype(__VA_ARGS__) { return __VA_ARGS__; }
 #define cppcmb_assert(msg, ...) \
 assert(((void)msg, (__VA_ARGS__)))
 
+#define cppcmb_unreachable() \
+cppcmb_assert("Unreachable code!", false)
+
 /**
  * Macro details.
  */
@@ -55,6 +58,9 @@ assert(((void)msg, (__VA_ARGS__)))
 #define cppcmb_prelude_requires_t1(id, ...) 						\
 bool id = false,                                                    \
 ::std::enable_if_t<id || (__VA_ARGS__), ::std::nullptr_t> = nullptr
+
+// XXX(LPeter1997): Probably a good idea to get rid of that return macro...
+// For members at least, as it doesn't return by ref.
 
 namespace cppcmb {
 
@@ -1765,6 +1771,189 @@ static_assert(                                        \
     [[nodiscard]] constexpr auto memo(PFwd&& p)
         cppcmb_return(packrat_t(cppcmb_fwd(p)))
 
+    namespace detail {
+
+        template <typename T, typename Tag>
+        class tagged_wrapper {
+        private:
+            template <typename U>
+            static constexpr bool is_self_v =
+                std::is_same_v<detail::remove_cvref_t<U>, tagged_wrapper>;
+
+            T m_Value;
+
+        public:
+            // XXX(LPeter1997): Noexcept specifier
+            template <typename TFwd>
+            constexpr tagged_wrapper(TFwd&& val)
+                : m_Value(cppcmb_fwd(val)) {
+            }
+
+            // XXX(LPeter1997): Why isn't the cppcmb_return returning an lvalue
+            // here? That's why it's manually written...
+
+            // XXX(LPeter1997): Noexcept specifier
+            [[nodiscard]] constexpr auto& value() & {
+                return m_Value;
+            }
+            // XXX(LPeter1997): Noexcept specifier
+            [[nodiscard]] constexpr auto const& value() const& {
+                return m_Value;
+            }
+            // XXX(LPeter1997): Noexcept specifier
+            [[nodiscard]] constexpr auto&& value() && {
+                return std::move(m_Value);
+            }
+            // XXX(LPeter1997): Noexcept specifier
+            [[nodiscard]] constexpr auto const&& value() const&& {
+                return std::move(m_Value);
+            }
+        };
+
+    } /* namespace detail */
+
+    /**
+     * A direct left-recursion-capable packrat parser.
+     */
+    template <typename P>
+    class drec_packrat_t : public detail::packrat_base<drec_packrat_t<P>> {
+    private:
+        template <typename U>
+        static constexpr bool is_self_v =
+            std::is_same_v<detail::remove_cvref_t<U>, drec_packrat_t>;
+
+        template <typename T>
+        using base_recursion = detail::tagged_wrapper<T, struct drec_base_tag>;
+
+        template <typename T>
+        using in_recursion = detail::tagged_wrapper<T, struct drec_in_tag>;
+
+        P m_Parser;
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]]
+        constexpr decltype(auto) grow(
+            reader<Src> const& r,
+            parser_result_t<P, Src>& old_res
+        ) const {
+
+            using in_rec = in_recursion<parser_result_t<P, Src>>;
+
+            if (old_res.is_failure()) {
+                return old_res;
+            }
+            auto& old_succ = old_res.success();
+
+            auto tmp_res = m_Parser.apply(r);
+            if (tmp_res.is_success()) {
+                auto& tmp_succ = tmp_res.success();
+                if (old_succ.remaining() < tmp_succ.remaining()) {
+                    // We successfully grew the seed
+                    auto& new_old = this->put_memo(r, in_rec(tmp_res)).value();
+                    return grow(r, new_old);
+                }
+                else {
+                    return old_res;
+                }
+            }
+            else {
+                return this->put_memo(r, in_rec(old_res)).value();
+            }
+        }
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
+        constexpr drec_packrat_t(PFwd&& p)
+            : m_Parser(cppcmb_fwd(p)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]]
+        constexpr decltype(auto) apply(reader<Src> const& r) const {
+            cppcmb_assert_parser(P, Src);
+
+            using apply_t = parser_result_t<P, Src>;
+            using base_rec = std::pair<base_recursion<apply_t>, bool>;
+            using in_rec = in_recursion<apply_t>;
+
+            auto* entry = this->get_memo(r);
+            if (entry == nullptr) {
+                // Nothing is in the cache yet, write a dummy error
+                this->put_memo(r, base_rec(failure(r.cursor()), true));
+                // Now invoke the parser
+                // If it's recursive, the entry must have changed
+                auto tmp_res = m_Parser.apply(r);
+                // Refresh entry
+                entry = this->get_memo(r);
+                cppcmb_assert(
+                    "The entry cannot be nullptr here!",
+                    entry != nullptr
+                );
+
+                // Check for change
+                if (auto* inr = std::any_cast<in_rec>(entry)) {
+                    // We are in recursion
+                    auto& res =
+                        this->put_memo(r, in_rec(std::move(tmp_res))).value();
+                    return grow(r, res);
+                }
+                else {
+                    // Base-thing, no progress
+                    // Overwrite the base-type to contain the result
+                    auto* br = std::any_cast<base_rec>(entry);
+                    cppcmb_assert(
+                        "A direct-packrat parser must either enter a "
+                        "'base' or 'in'-recursion entry!",
+                        br != nullptr
+                    );
+                    return this->put_memo(
+                        r,
+                        base_rec(std::move(tmp_res), false)
+                    ).first.value();
+                }
+            }
+            else {
+                // Something is in the cache
+                if (auto* br_p = std::any_cast<base_rec>(entry)) {
+                    auto& br = *br_p;
+                    if (br.second) {
+                        // Recursion signal
+                        return this->put_memo(
+                            r,
+                            in_rec(failure(r.cursor()))
+                        ).value();
+                    }
+                    else {
+                        return br.first.value();
+                    }
+                }
+                else {
+                    auto* inr = std::any_cast<in_rec>(entry);
+                    cppcmb_assert(
+                        "A direct-packrat parser must either enter a "
+                        "'base' or 'in'-recursion entry!",
+                        inr != nullptr
+                    );
+                    return inr->value();
+                }
+            }
+        }
+    };
+
+    template <typename PFwd>
+    drec_packrat_t(PFwd&&) -> drec_packrat_t<detail::remove_cvref_t<PFwd>>;
+
+    /**
+     * Wrapper to make any combinator a direct-left-recursive packrat parser.
+     */
+    template <typename PFwd>
+    [[nodiscard]] constexpr auto memo_d(PFwd&& p)
+        cppcmb_return(drec_packrat_t(cppcmb_fwd(p)))
+
     /**
      * Some helper functionalities for the action combinator.
      * Not strictly parsing, but helpful utilities, like dropping elements.
@@ -1851,6 +2040,7 @@ static_assert(                                        \
 /**
  * Library macro undefines.
  */
+#undef cppcmb_unreachable
 #undef cppcmb_assert
 #undef cppcmb_return
 #undef cppcmb_requires_t
