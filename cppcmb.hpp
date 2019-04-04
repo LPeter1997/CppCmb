@@ -53,22 +53,18 @@ cppcmb_assert("Unreachable code!", false)
 #define cppcmb_noexcept(...) \
 noexcept(noexcept(__VA_ARGS__))
 
-#define cppcmb_getter(name, ...)                                     \
-[[nodiscard]]                                                        \
-constexpr auto& name() & cppcmb_noexcept(__VA_ARGS__) {              \
-    return __VA_ARGS__;                                              \
-}                                                                    \
-[[nodiscard]]                                                        \
-constexpr auto const& name() const& cppcmb_noexcept(__VA_ARGS__) {   \
-    return __VA_ARGS__;                                              \
-}                                                                    \
-[[nodiscard]]                                                        \
-constexpr auto&& name() && cppcmb_noexcept(__VA_ARGS__) {            \
-    return std::move(__VA_ARGS__);                                   \
-}                                                                    \
-[[nodiscard]]                                                        \
-constexpr auto const&& name() const&& cppcmb_noexcept(__VA_ARGS__) { \
-    return std::move(__VA_ARGS__);                                   \
+#define cppcmb_getter(name, ...)                               \
+[[nodiscard]] constexpr auto& name() & noexcept {              \
+    return __VA_ARGS__;                                        \
+}                                                              \
+[[nodiscard]] constexpr auto const& name() const& noexcept {   \
+    return __VA_ARGS__;                                        \
+}                                                              \
+[[nodiscard]] constexpr auto&& name() && noexcept {            \
+    return std::move(__VA_ARGS__);                             \
+}                                                              \
+[[nodiscard]] constexpr auto const&& name() const&& noexcept { \
+    return std::move(__VA_ARGS__);                             \
 }
 
 /**
