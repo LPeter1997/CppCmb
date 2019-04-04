@@ -454,7 +454,7 @@ namespace cppcmb {
         template <typename... Ts>
         [[nodiscard]]
         constexpr auto product_values_impl(product<Ts...>&& res) noexcept {
-            return res;
+            return std::move(res);
         }
 
         // Base-case for exactly one element
