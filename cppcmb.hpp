@@ -422,10 +422,10 @@ namespace cppcmb {
             : m_Value(cppcmb_fwd(val)) {
         }
 
-        // XXX(LPeter1997): Exception specifier?
         template <typename... Us,
             cppcmb_requires_t(sizeof...(Us) != 1)>
         constexpr product(Us&&... vals)
+            noexcept(std::is_nothrow_constructible_v<tuple_type, Us&&...>)
             : m_Value(cppcmb_fwd(vals)...) {
         }
 
@@ -456,18 +456,16 @@ namespace cppcmb {
      * Make products comparable.
      */
     template <typename... Ts, typename... Us>
-    [[nodiscard]] constexpr bool operator==(
+    [[nodiscard]] constexpr auto operator==(
         product<Ts...> const& l,
-        product<Us...> const& r) noexcept {
-        return l.as_tuple() == r.as_tuple();
-    }
+        product<Us...> const& r
+    ) cppcmb_return(l.as_tuple() == r.as_tuple())
 
     template <typename... Ts, typename... Us>
-    [[nodiscard]] constexpr bool operator!=(
+    [[nodiscard]] constexpr auto operator!=(
         product<Ts...> const& l,
-        product<Us...> const& r) noexcept {
-        return l.as_tuple() != r.as_tuple();
-    }
+        product<Us...> const& r
+    ) cppcmb_return(l.as_tuple() != r.as_tuple())
 
     namespace detail {
 
@@ -475,20 +473,24 @@ namespace cppcmb {
         template <typename... Ts>
         [[nodiscard]]
         constexpr auto product_values_impl(product<Ts...>&& res) noexcept {
+            // XXX(LPeter1997): Is this right?
+            // XXX(LPeter1997): Is the noexcept specifier right?
             return std::move(res);
         }
 
         // Base-case for exactly one element
+        // XXX(LPeter1997): Noexcept specifier
         template <typename T>
         [[nodiscard]] constexpr auto product_values_impl(product<T>&& res) {
             return std::move(res).template get<0>();
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
-        product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t)
-            noexcept;
+        product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t);
 
+        // XXX(LPeter1997): Noexcept specifier
         template <std::size_t... Is,
             typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto product_values_expand(
@@ -501,6 +503,7 @@ namespace cppcmb {
             );
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         template <std::size_t... Is,
             typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto product_values_append(
@@ -515,6 +518,7 @@ namespace cppcmb {
             );
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto product_values_head(
             std::true_type,
@@ -527,6 +531,7 @@ namespace cppcmb {
             );
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto product_values_head(
             std::false_type,
@@ -539,9 +544,10 @@ namespace cppcmb {
             );
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         template <typename... Ts, typename Head, typename... Tail>
         [[nodiscard]] constexpr auto
-        product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t) noexcept {
+        product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t) {
             return product_values_head(
                 is_product<remove_cvref_t<Head>>(),
                 std::move(res),
@@ -552,6 +558,7 @@ namespace cppcmb {
 
     } /* namespace detail */
 
+    // XXX(LPeter1997): Noexcept specifier
     /**
      * Concatenate products and values.
      */
@@ -578,17 +585,16 @@ namespace cppcmb {
     private:
         using variant_type = std::variant<Ts...>;
 
-        variant_type m_Value;
+        cppcmb_self_check(sum);
 
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, sum>;
+        variant_type m_Value;
 
     public:
         // XXX(LPeter1997): Exception specifier?
         template <typename T,
             cppcmb_requires_t(!is_self_v<T>)>
         constexpr sum(T&& val)
+            noexcept(std::is_nothrow_constructible_v<variant_type, T&&>)
             : m_Value(cppcmb_fwd(val)) {
         }
 
@@ -618,16 +624,14 @@ namespace cppcmb {
     template <typename... Ts>
     [[nodiscard]] constexpr auto operator==(
         sum<Ts...> const& l,
-        sum<Ts...> const& r) {
-        return l.as_variant() == r.as_variant();
-    }
+        sum<Ts...> const& r
+    ) cppcmb_return(l.as_variant() == r.as_variant())
 
     template <typename... Ts>
     [[nodiscard]] constexpr auto operator!=(
         sum<Ts...> const& l,
-        sum<Ts...> const& r) {
-        return l.as_variant() != r.as_variant();
-    }
+        sum<Ts...> const& r
+    ) cppcmb_return(l.as_variant() != r.as_variant())
 
     namespace detail {
 
@@ -671,6 +675,7 @@ namespace cppcmb {
 
     namespace detail {
 
+        // XXX(LPeter1997): Noexcept specifier
         template <typename RetT, typename T>
         constexpr auto sum_values_impl(std::false_type, T&& val) {
             return RetT(cppcmb_fwd(val));
@@ -687,6 +692,7 @@ namespace cppcmb {
 
     } /* namespace detail */
 
+    // XXX(LPeter1997): Noexcept specifier
     template <typename... Ts, typename T>
     constexpr auto sum_values(T&& val) {
         return detail::sum_values_impl<sum_values_t<Ts...>>(
@@ -697,6 +703,7 @@ namespace cppcmb {
 
     namespace detail {
 
+        // XXX(LPeter1997): Noexcept specifier
         // Arg is a product
         template <typename Fn, typename T>
         [[nodiscard]] constexpr decltype(auto) apply_value_impl(
@@ -708,6 +715,7 @@ namespace cppcmb {
             );
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         // Arg is a sum
         template <typename Fn, typename T>
         [[nodiscard]] constexpr decltype(auto) apply_value_impl(
@@ -719,6 +727,7 @@ namespace cppcmb {
             );
         }
 
+        // XXX(LPeter1997): Noexcept specifier
         // Arg is a single value
         template <typename Fn, typename T>
         [[nodiscard]] constexpr decltype(auto) apply_value_impl(
@@ -730,6 +739,7 @@ namespace cppcmb {
 
     } /* namespace detail */
 
+    // XXX(LPeter1997): Noexcept specifier
     // XXX(LPeter1997): Make apply recursive, so that underlying sums or
     // products can get unwrapped too
     template <typename Fn, typename T>
@@ -894,11 +904,14 @@ static_assert(                                        \
         // XXX(LPeter1997): Is it right to have such a long noexcept specifier?
         template <typename PFwd, typename FnFwd>
         constexpr action_t(PFwd&& cmb, FnFwd&& fn)
-            noexcept(noexcept(cppcmb_fwd(cmb)) && noexcept(cppcmb_fwd(fn)))
+            noexcept(
+                   std::is_nothrow_constructible_v<P, PFwd&&>
+                && std::is_nothrow_constructible_v<Fn, FnFwd&&>
+            )
             : m_Parser(cppcmb_fwd(cmb)), m_Fn(cppcmb_fwd(fn)) {
         }
 
-        // XXX(LPeter1997): Noexcept specifier?
+        // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
         [[nodiscard]]
         constexpr decltype(auto) apply(reader<Src> const& src) const {
@@ -925,7 +938,7 @@ static_assert(                                        \
         }
 
     private:
-        // XXX(LPeter1997): Noexcept specifier?
+        // XXX(LPeter1997): Noexcept specifier
         // Action can fail
         template <typename FRes, typename Src>
         [[nodiscard]] constexpr auto apply_impl(
@@ -953,7 +966,7 @@ static_assert(                                        \
             }
         }
 
-        // XXX(LPeter1997): Noexcept specifier?
+        // XXX(LPeter1997): Noexcept specifier
         // Action can't fail
         template <typename FRes, typename Src>
         [[nodiscard]] constexpr auto apply_impl(
@@ -1050,9 +1063,12 @@ static_assert(                                        \
         P2 m_Second;
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename P1Fwd, typename P2Fwd>
         constexpr seq_t(P1Fwd&& p1, P2Fwd&& p2)
+            noexcept(
+                   std::is_nothrow_constructible_v<P1, P1Fwd&&>
+                && std::is_nothrow_constructible_v<P2, P2Fwd&&>
+            )
             : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
         }
 
@@ -1102,9 +1118,8 @@ static_assert(                                        \
      */
     template <typename P1, typename P2,
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
-    [[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2) {
-        return seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2));
-    }
+    [[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
+        cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
     /**
      * A tag-type for a more uniform alternative syntax.
@@ -1140,6 +1155,10 @@ static_assert(                                        \
         // XXX(LPeter1997): Noexcept specifier
         template <typename P1Fwd, typename P2Fwd>
         constexpr alt_t(P1Fwd&& p1, P2Fwd&& p2)
+            noexcept(
+                   std::is_nothrow_constructible_v<P1, P1Fwd&&>
+                && std::is_nothrow_constructible_v<P2, P2Fwd&&>
+            )
             : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
         }
 
@@ -1199,18 +1218,16 @@ static_assert(                                        \
      */
     template <typename P1, typename P2,
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
-    [[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2) {
-        return alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2));
-    }
+    [[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2)
+        cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
     /**
      * Ignore pass.
      */
     template <typename P2,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
-    [[nodiscard]] constexpr auto operator|(pass_t, P2&& p2) {
-        return cppcmb_fwd(p2);
-    }
+    [[nodiscard]] constexpr auto operator|(pass_t, P2&& p2)
+        cppcmb_return(cppcmb_fwd(p2))
 
     /**
      * A parser that tries all alternatives and then returns the furthest
@@ -1229,9 +1246,12 @@ static_assert(                                        \
         P2 m_Second;
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename P1Fwd, typename P2Fwd>
         constexpr eager_alt_t(P1Fwd&& p1, P2Fwd&& p2)
+            noexcept(
+                   std::is_nothrow_constructible_v<P1, P1Fwd&&>
+                && std::is_nothrow_constructible_v<P2, P2Fwd&&>
+            )
             : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
         }
 
@@ -1312,18 +1332,16 @@ static_assert(                                        \
      */
     template <typename P1, typename P2,
         cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
-    [[nodiscard]] constexpr auto operator||(P1&& p1, P2&& p2) {
-        return eager_alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2));
-    }
+    [[nodiscard]] constexpr auto operator||(P1&& p1, P2&& p2)
+        cppcmb_return(eager_alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
     /**
      * Ignore pass.
      */
     template <typename P2,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
-    [[nodiscard]] constexpr auto operator||(pass_t, P2&& p2) {
-        return cppcmb_fwd(p2);
-    }
+    [[nodiscard]] constexpr auto operator||(pass_t, P2&& p2)
+        cppcmb_return(cppcmb_fwd(p2))
 
     /**
      * A type-pack that describes a collection except it's type.
@@ -1367,9 +1385,7 @@ static_assert(                                        \
     class many_t : public combinator<many_t<P>>,
                    private detail::many_tag {
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, many_t>;
+        cppcmb_self_check(many_t);
 
         template <typename Src>
         using value_t = typename To::template type<parser_value_t<P, Src>>;
@@ -1377,29 +1393,25 @@ static_assert(                                        \
         P m_Parser;
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename PFwd,
             cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr many_t(PFwd&& p)
+            noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
             : m_Parser(cppcmb_fwd(p)) {
         }
 
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) & {
-            return many_t<P, To2>(m_Parser);
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) &
+            cppcmb_return(many_t<P, To2>(m_Parser))
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) const& {
-            return many_t<P, To2>(m_Parser);
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) const&
+            cppcmb_return(many_t<P, To2>(m_Parser))
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) && {
-            return many_t<P, To2>(std::move(m_Parser));
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) &&
+            cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) const&& {
-            return many_t<P, To2>(std::move(m_Parser));
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) const&&
+            cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
 
         cppcmb_getter(underlying, m_Parser)
 
@@ -1435,9 +1447,9 @@ static_assert(                                        \
      */
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-    [[nodiscard]] constexpr auto operator*(P&& p) {
-        return many_t(cppcmb_fwd(p));
-    }
+    [[nodiscard]] constexpr auto operator*(P&& p)
+        cppcmb_return(many_t(cppcmb_fwd(p)))
+
     /**
      * A parser that applies a parser as many times as it can, before it fails.
      * Only succeeds if the parser could be applied at least once.
@@ -1446,9 +1458,7 @@ static_assert(                                        \
     class many1_t : public combinator<many1_t<P>>,
                     private detail::many_tag {
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, many1_t>;
+        cppcmb_self_check(many1_t);
 
         template <typename Src>
         using value_t = parser_value_t<many_t<P, To>, Src>;
@@ -1456,29 +1466,25 @@ static_assert(                                        \
         many_t<P, To> m_Parser;
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename PFwd,
             cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr many1_t(PFwd&& p)
+            noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
             : m_Parser(many_t<P, To>(cppcmb_fwd(p))) {
         }
 
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) & {
-            return many1_t<P, To2>(m_Parser.underlying());
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) &
+            cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) const& {
-            return many1_t<P, To2>(m_Parser.underlying());
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) const&
+            cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) && {
-            return many1_t<P, To2>(std::move(m_Parser).underlying());
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) &&
+            cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
         template <typename To2>
-        [[nodiscard]] constexpr auto collect_to(To2) const&& {
-            return many1_t<P, To2>(std::move(m_Parser).underlying());
-        }
+        [[nodiscard]] constexpr auto collect_to(To2) const&&
+            cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
@@ -1513,18 +1519,16 @@ static_assert(                                        \
      */
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-    [[nodiscard]] constexpr auto operator+(P&& p) {
-        return many1_t(cppcmb_fwd(p));
-    }
+    [[nodiscard]] constexpr auto operator+(P&& p)
+        cppcmb_return(many1_t(cppcmb_fwd(p)))
 
     /**
      * Operator to collect 'many' and 'many1' to a different container.
      */
     template <typename P, typename To,
         cppcmb_requires_t(detail::is_many_v<detail::remove_cvref_t<P>>)>
-    [[nodiscard]] constexpr auto operator>>(P&& p, To to) {
-        return cppcmb_fwd(p).collect_to(to);
-    }
+    [[nodiscard]] constexpr auto operator>>(P&& p, To to)
+        cppcmb_return(cppcmb_fwd(p).collect_to(to))
 
     /**
      * A parser that wraps the underlying parse result into a maybe-type.
@@ -1534,9 +1538,7 @@ static_assert(                                        \
     template <typename P>
     class opt_t : public combinator<opt_t<P>> {
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, opt_t>;
+        cppcmb_self_check(opt_t);
 
         // XXX(LPeter1997): Change to own optional-like
         template <typename Src>
@@ -1545,10 +1547,10 @@ static_assert(                                        \
         P m_Parser;
 
     public:
-        // XXX(LPeter1997): noexcept specifier
         template <typename PFwd,
             cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr opt_t(PFwd&& p)
+            noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
             : m_Parser(cppcmb_fwd(p)) {
         }
 
@@ -1580,9 +1582,8 @@ static_assert(                                        \
      */
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-    [[nodiscard]] constexpr auto operator-(P&& p) {
-        return opt_t(cppcmb_fwd(p));
-    }
+    [[nodiscard]] constexpr auto operator-(P&& p)
+        cppcmb_return(opt_t(cppcmb_fwd(p)))
 
     /**
      * A "wrapper" parser. Does nothing, just calls a cppcmb_parse_rule method
@@ -1626,7 +1627,7 @@ static_assert(                                        \
     auto const name =              \
     ::cppcmb::rule_t<__VA_ARGS__, struct cppcmb_unique_id(cppcmb_rule_tag)>()
 
-    // XXX(LPeter1997): Noexcept specifier?
+    // XXX(LPeter1997): Noexcept specifier
     /**
      * A library macro that actually gets published.
      * Used to define rules.
@@ -1647,6 +1648,7 @@ static_assert(                                        \
 
     namespace detail {
 
+        // XXX(LPeter1997): Noexcept specifier
         /**
          * Functionality for hashing a pair. Straight from Boost.
          */
@@ -1656,6 +1658,7 @@ static_assert(                                        \
         }
 
         struct pair_hasher {
+            // XXX(LPeter1997): Noexcept specifier
             template <typename T1, typename T2>
             constexpr auto operator()(std::pair<T1, T2> const& p) const {
                 std::size_t seed = 0;
@@ -1730,12 +1733,11 @@ static_assert(                                        \
             std::uintptr_t m_ID;
 
         protected:
-            // XXX(LPeter1997): Noexcept specifier
-            constexpr packrat_base()
+            constexpr packrat_base() noexcept
                 : m_ID(reinterpret_cast<std::uintptr_t>(this)) {
             }
 
-            [[nodiscard]] constexpr auto const& original_id() const {
+            [[nodiscard]] constexpr auto const& original_id() const noexcept {
                 return m_ID;
             }
 
@@ -1763,17 +1765,15 @@ static_assert(                                        \
     template <typename P>
     class packrat_t : public detail::packrat_base<packrat_t<P>> {
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, packrat_t>;
+        cppcmb_self_check(packrat_t);
 
         P m_Parser;
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename PFwd,
             cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr packrat_t(PFwd&& p)
+            noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
             : m_Parser(cppcmb_fwd(p)) {
         }
 
@@ -1802,25 +1802,22 @@ static_assert(                                        \
      * Wrapper to make any combinator a packrat parser.
      */
     template <typename PFwd>
-    [[nodiscard]] constexpr auto memo(PFwd&& p) {
-        return packrat_t(cppcmb_fwd(p));
-    }
+    [[nodiscard]] constexpr auto memo(PFwd&& p)
+        cppcmb_return(packrat_t(cppcmb_fwd(p)))
 
     namespace detail {
 
         template <typename T, typename Tag>
         class tagged_wrapper {
         private:
-            template <typename U>
-            static constexpr bool is_self_v =
-                std::is_same_v<detail::remove_cvref_t<U>, tagged_wrapper>;
+            cppcmb_self_check(tagged_wrapper);
 
             T m_Value;
 
         public:
-            // XXX(LPeter1997): Noexcept specifier
             template <typename TFwd>
             constexpr tagged_wrapper(TFwd&& val)
+                noexcept(std::is_nothrow_constructible_v<T, TFwd&&>)
                 : m_Value(cppcmb_fwd(val)) {
             }
 
@@ -1835,9 +1832,7 @@ static_assert(                                        \
     template <typename P>
     class drec_packrat_t : public detail::packrat_base<drec_packrat_t<P>> {
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, drec_packrat_t>;
+        cppcmb_self_check(drec_packrat_t);
 
         template <typename T>
         using base_recursion = detail::tagged_wrapper<T, struct drec_base_tag>;
@@ -1880,10 +1875,10 @@ static_assert(                                        \
         }
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename PFwd,
             cppcmb_requires_t(!is_self_v<PFwd>)>
         constexpr drec_packrat_t(PFwd&& p)
+            noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
             : m_Parser(cppcmb_fwd(p)) {
         }
 
@@ -1968,9 +1963,8 @@ static_assert(                                        \
      * Wrapper to make any combinator a direct-left-recursive packrat parser.
      */
     template <typename PFwd>
-    [[nodiscard]] constexpr auto memo_d(PFwd&& p) {
-        return drec_packrat_t(cppcmb_fwd(p));
-    }
+    [[nodiscard]] constexpr auto memo_d(PFwd&& p)
+        cppcmb_return(drec_packrat_t(cppcmb_fwd(p)))
 
     /**
      * Here we provide operator%= to turn a parser into packrat parsers.
@@ -1990,23 +1984,20 @@ static_assert(                                        \
     // Identity
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-    constexpr auto operator%=(P&& parser, as_self_t) {
-        return cppcmb_fwd(parser);
-    }
+    constexpr auto operator%=(P&& parser, as_self_t)
+        cppcmb_return(cppcmb_fwd(parser))
 
     // Simple packrat
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-    constexpr auto operator%=(P&& parser, as_memo_t) {
-        return memo(cppcmb_fwd(parser));
-    }
+    constexpr auto operator%=(P&& parser, as_memo_t)
+        cppcmb_return(memo(cppcmb_fwd(parser)))
 
     // Direct-left-recursive packrat
     template <typename P,
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-    constexpr auto operator%=(P&& parser, as_memo_d_t) {
-        return memo_d(cppcmb_fwd(parser));
-    }
+    constexpr auto operator%=(P&& parser, as_memo_d_t)
+        cppcmb_return(memo_d(cppcmb_fwd(parser)))
 
     /**
      * Some helper functionalities for the action combinator.
@@ -2019,9 +2010,7 @@ static_assert(                                        \
     template <typename Pred>
     class filter {
     private:
-        template <typename U>
-        static constexpr bool is_self_v =
-            std::is_same_v<detail::remove_cvref_t<U>, filter>;
+        cppcmb_self_check(filter);
 
         template <typename... Ts>
         using value_t = decltype(product_values(
@@ -2031,10 +2020,10 @@ static_assert(                                        \
         Pred m_Predicate;
 
     public:
-        // XXX(LPeter1997): Noexcept specifier
         template <typename PredFwd,
             cppcmb_requires_t(!is_self_v<PredFwd>)>
         constexpr filter(PredFwd&& pred)
+            noexcept(std::is_nothrow_constructible_v<Pred, PredFwd&&>)
             : m_Predicate(cppcmb_fwd(pred)) {
         }
 
