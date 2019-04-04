@@ -1963,6 +1963,42 @@ static_assert(                                        \
     }
 
     /**
+     * Here we provide operator%= to turn a parser into packrat parsers.
+     */
+
+    // Tag-types for the parsers
+    struct as_self_t {};
+    struct as_memo_t {};
+    struct as_memo_d_t {};
+
+    inline constexpr auto as_self = as_self_t();
+    inline constexpr auto as_memo = as_memo_t();
+    inline constexpr auto as_memo_d = as_memo_d_t();
+
+    // The operators
+
+    // Identity
+    template <typename P,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+    constexpr auto operator%=(P&& parser, as_self_t) {
+        return cppcmb_fwd(parser);
+    }
+
+    // Simple packrat
+    template <typename P,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+    constexpr auto operator%=(P&& parser, as_memo_t) {
+        return memo(cppcmb_fwd(parser));
+    }
+
+    // Direct-left-recursive packrat
+    template <typename P,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+    constexpr auto operator%=(P&& parser, as_memo_d_t) {
+        return memo_d(cppcmb_fwd(parser));
+    }
+
+    /**
      * Some helper functionalities for the action combinator.
      * Not strictly parsing, but helpful utilities, like dropping elements.
      */
