@@ -18,6 +18,7 @@
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -1967,6 +1968,85 @@ static_assert(                                        \
     [[nodiscard]] constexpr auto memo_d(PFwd&& p)
         cppcmb_return(drec_packrat_t(cppcmb_fwd(p)))
 
+    namespace detail {
+
+        class irec_head {
+        private:
+            std::uintptr_t                     m_HeadID;
+            std::unordered_set<std::uintptr_t> m_InvolvedIDSet;
+            std::unordered_set<std::uintptr_t> m_EvalIDSet;
+
+        public:
+            // XXX(LPeter1997): Noexcept specifier
+            explicit /* constexpr */ irec_head(std::uintptr_t hid)
+                : m_HeadID(hid) {
+            }
+        };
+
+        template <typename T>
+        class irec_left_recursive {
+        private:
+            T                        m_Seed;
+            std::uintptr_t           m_ParserID;
+            std::optional<irec_head> m_Head;
+
+        public:
+            // XXX(LPeter1997): Noexcept specifier
+            template <typename TFwd>
+            constexpr irec_left_recursive(TFwd&& seed, std::uintptr_t pid)
+                : m_Seed(cppcmb_fwd(seed)), m_ParserID(pid) {
+            }
+        };
+
+    } /* namespace detail */
+
+    /**
+     * An indirect left-recursion-capable packrat parser.
+     * More expensive than the direct one.
+     */
+    template <typename P>
+    class irec_packrat_t : public detail::packrat_base<irec_packrat_t<P>> {
+    private:
+        cppcmb_self_check(irec_packrat_t);
+
+        using head = detail::irec_head;
+
+        template <typename T>
+        using left_recursive = detail::irec_left_recursive<T>;
+
+        P m_Parser;
+
+    public:
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
+        constexpr irec_packrat_t(PFwd&& p)
+            noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
+            : m_Parser(cppcmb_fwd(p)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]]
+        constexpr decltype(auto) apply(reader<Src> const& r) const {
+            cppcmb_assert_parser(P, Src);
+
+            using apply_t = parser_result_t<P, Src>;
+            using left_rec = left_recursive<apply_t>;
+
+            // XXX(LPeter1997): Implement
+        }
+    };
+
+    template <typename PFwd>
+    irec_packrat_t(PFwd&&) -> irec_packrat_t<detail::remove_cvref_t<PFwd>>;
+
+    /**
+     * Wrapper to make any combinator a direct-left-recursive packrat parser.
+     */
+    template <typename PFwd>
+    [[nodiscard]] constexpr auto memo_i(PFwd&& p)
+        cppcmb_return(irec_packrat_t(cppcmb_fwd(p)))
+
     /**
      * Here we provide operator%= to turn a parser into packrat parsers.
      */
@@ -1975,10 +2055,12 @@ static_assert(                                        \
     struct as_self_t {};
     struct as_memo_t {};
     struct as_memo_d_t {};
+    struct as_memo_i_t {};
 
     inline constexpr auto as_self = as_self_t();
     inline constexpr auto as_memo = as_memo_t();
     inline constexpr auto as_memo_d = as_memo_d_t();
+    inline constexpr auto as_memo_i = as_memo_i_t();
 
     // The operators
 
@@ -1999,6 +2081,12 @@ static_assert(                                        \
         cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
     constexpr auto operator%=(P&& parser, as_memo_d_t)
         cppcmb_return(memo_d(cppcmb_fwd(parser)))
+
+    // Indirect-left-recursive packrat
+    template <typename P,
+        cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+    constexpr auto operator%=(P&& parser, as_memo_i_t)
+        cppcmb_return(memo_i(cppcmb_fwd(parser)))
 
     /**
      * Some helper functionalities for the action combinator.
