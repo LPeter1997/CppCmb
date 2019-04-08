@@ -1623,9 +1623,8 @@ static_assert(                                        \
     private:
         cppcmb_self_check(opt_t);
 
-        // XXX(LPeter1997): Change to own optional-like
         template <typename Src>
-        using value_t = std::optional<parser_value_t<P, Src>>;
+        using value_t = maybe<parser_value_t<P, Src>>;
 
         P m_Parser;
 
@@ -1645,12 +1644,12 @@ static_assert(                                        \
 
             auto p_inv = m_Parser.apply(r);
             if (p_inv.is_failure()) {
-                return success(value_t<Src>(), r.cursor());
+                return success(value_t<Src>(none()), r.cursor());
             }
             else {
                 auto succ = std::move(p_inv).success();
                 return success(
-                    value_t<Src>(std::move(succ).value()),
+                    value_t<Src>(some(std::move(succ).value())),
                     succ.remaining()
                 );
             }
