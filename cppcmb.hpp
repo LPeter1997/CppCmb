@@ -2330,6 +2330,11 @@ static_assert(                                        \
         constexpr void erase(It it) {
             m_Heads.erase(it);
         }
+
+        // XXX(LPeter1997): Noexcept specifier
+        void clear() {
+            m_Heads.clear();
+        }
     };
 
     class call_stack {
@@ -2358,6 +2363,11 @@ static_assert(                                        \
         [[nodiscard]] /* constexpr */ auto end() { return m_Stack.end(); }
         // XXX(LPeter1997): Noexcept specifier
         [[nodiscard]] /* constexpr */ auto end() const { return m_Stack.end(); }
+
+        // XXX(LPeter1997): Noexcept specifier
+        void clear() {
+            m_Stack.clear();
+        }
     };
 
     /**
@@ -2374,6 +2384,13 @@ static_assert(                                        \
         cppcmb_getter(memo, m_MemoTable)
         cppcmb_getter(call_heads, m_RecursionHeads)
         cppcmb_getter(call_stack, m_LrStack)
+
+        // XXX(LPeter1997): Noexcept specifier
+        void clear() {
+            m_MemoTable.clear();
+            m_RecursionHeads.clear();
+            m_LrStack.clear();
+        }
     };
 
     /**
@@ -2488,6 +2505,37 @@ static_assert(                                        \
 
     template <std::size_t... Ns>
     inline constexpr auto select = select_t<Ns...>();
+
+    /**
+     * An abstract type to wrap everything into a simple interface.
+     */
+    template <typename P>
+    class parser {
+    private:
+        cppcmb_self_check(parser);
+
+        P            m_Parser;
+        memo_context m_Context;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename PFwd,
+            cppcmb_requires_t(!is_self_v<PFwd>)>
+        constexpr parser(PFwd&& p)
+            : m_Parser(cppcmb_fwd(p)) {
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr decltype(auto) parse(Src const& src) {
+            m_Context.clear();
+            auto r = reader(src, m_Context);
+            return m_Parser.apply(r);
+        }
+    };
+
+    template <typename PFwd>
+    parser(PFwd&&) -> parser<detail::remove_cvref_t<PFwd>>;
 
 } /* namespace cppcmb */
 
