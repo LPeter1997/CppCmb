@@ -2033,7 +2033,7 @@ static_assert(                                        \
         template <typename Coll, typename Val, typename It>
         constexpr bool contains(Coll const& coll, Val const& v, It& it) {
             it = coll.find(v);
-            return it == coll.end();
+            return it != coll.end();
         }
 
         template <typename Coll, typename Val>
@@ -2058,11 +2058,24 @@ static_assert(                                        \
 
         P m_Parser;
 
+        // XXX(LPeter1997): decltype(auto) where possible
+
+        // XXX(LPeter1997): Noexcept specifier
+        // XXX(LPeter1997): This could be static
+        template <typename T>
+        constexpr decltype(auto) to_result(std::any& a) const {
+            if (auto* r = std::any_cast<std::shared_ptr<left_recursive>>(&a)) {
+                return std::any_cast<T&>((*r)->seed());
+            }
+            else {
+                return std::any_cast<T&>(a);
+            }
+        }
+
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
         constexpr auto recall(reader<Src> const& r) const
             -> std::optional<std::any> {
-
             using return_t = parser_result_t<P, Src>;
 
             auto& heads = r.context().call_heads();
@@ -2080,7 +2093,6 @@ static_assert(                                        \
             }
             else {
                 auto& h = *in_heads;
-                auto& involved = h.involved_set();
 
                 if (cached == nullptr && !(
                        this->original_id() == h.head_id()
@@ -2089,7 +2101,7 @@ static_assert(                                        \
                     return return_t(failure(r.cursor()));
                 }
 
-                auto it = h.eval_set().end();
+                auto it = h.eval_set().cend();
                 if (detail::contains(h.eval_set(), this->original_id(), it)) {
                     // Remove the rule id from the evaluation id set of the head
                     h.eval_set().erase(it);
@@ -2123,7 +2135,7 @@ static_assert(                                        \
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
-        constexpr decltype(auto) lr_answer(
+        constexpr auto lr_answer(
             reader<Src> const& r,
             left_recursive& growable) const {
 
@@ -2134,7 +2146,7 @@ static_assert(                                        \
             );
 
             auto& h = *growable.head();
-            auto& seed = std::any_cast<return_t>(growable.seed());
+            auto& seed = to_result<return_t>(growable.seed());
 
             if (h.head_id() != this->original_id()) {
                 return seed;
@@ -2152,10 +2164,10 @@ static_assert(                                        \
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
-        constexpr decltype(auto) grow(
+        constexpr auto grow(
             reader<Src> const& r,
             parser_result_t<P, Src>& old_res,
-            head& h) const {
+            head& h) const -> parser_result_t<P, Src> {
 
             using return_t = parser_result_t<P, Src>;
 
@@ -2184,7 +2196,7 @@ static_assert(                                        \
                     auto* val = this->get_memo(r);
                     cppcmb_assert("", val != nullptr);
 
-                    return std::any_cast<return_t&>(*val);
+                    return this-> template to_result<return_t>(*val);
                 }
             }
             else {
@@ -2208,7 +2220,7 @@ static_assert(                                        \
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
         [[nodiscard]]
-        constexpr decltype(auto) apply(reader<Src> const& r) const {
+        constexpr auto apply(reader<Src> const& r) const {
             cppcmb_assert_parser(P, Src);
 
             using return_t = parser_result_t<P, Src>;
@@ -2218,7 +2230,7 @@ static_assert(                                        \
             auto m = recall(r);
             if (!m) {
                 auto base = std::make_shared<left_recursive>(
-                    return_t(failure(r.cursor()), this->original_id())
+                    return_t(failure(r.cursor())), this->original_id()
                 );
                 lr_stack.push_front(base);
                 this->put_memo(r, base);
@@ -2237,11 +2249,11 @@ static_assert(                                        \
                 auto& entry = *m;
                 if (auto* lr =
                     std::any_cast<std::shared_ptr<left_recursive>>(&entry)) {
-                    setup_lr(r, *lr);
-                    return std::any_cast<return_t&>(lr->seed());
+                    setup_lr(r, **lr);
+                    return this-> template to_result<return_t>((*lr)->seed());
                 }
                 else {
-                    return std::any_cast<return_t&>(entry);
+                    return this-> template to_result<return_t>(entry);
                 }
             }
         }
@@ -2283,6 +2295,41 @@ static_assert(                                        \
         /* constexpr */ detail::irec_head* get(reader<Src> const& r) const {
             return get(r.cursor());
         }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        constexpr decltype(auto) operator[](reader<Src> const& r) {
+            return m_Heads[r.cursor()];
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto find(reader<Src> const& r) {
+            return m_Heads.find(r.cursor());
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]] constexpr auto find(reader<Src> const& r) const {
+            return m_Heads.find(r.cursor());
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto begin() { return m_Heads.begin(); }
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto begin() const {
+            return m_Heads.begin();
+        }
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto end() { return m_Heads.end(); }
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto end() const { return m_Heads.end(); }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename It>
+        constexpr void erase(It it) {
+            m_Heads.erase(it);
+        }
     };
 
     class call_stack {
@@ -2290,7 +2337,27 @@ static_assert(                                        \
         std::deque<std::shared_ptr<detail::irec_left_recursive>> m_Stack;
 
     public:
-        // XXX(LPeter1997): Implement
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename TFwd>
+        constexpr void push_front(TFwd&& val) {
+            m_Stack.push_front(val);
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        /* constexpr */ void pop_front() {
+            m_Stack.pop_front();
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto begin() { return m_Stack.begin(); }
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto begin() const {
+            return m_Stack.begin();
+        }
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto end() { return m_Stack.end(); }
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]] /* constexpr */ auto end() const { return m_Stack.end(); }
     };
 
     /**
