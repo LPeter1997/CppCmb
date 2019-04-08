@@ -13,6 +13,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -94,6 +95,10 @@ static constexpr bool is_self_v =                                 \
 
 // XXX(LPeter1997): We could eliminate std::any by having a shared memo-table
 // between the "same-origin" packrat parsers.
+
+// XXX(LPeter1997): Clean up public interface. For example memo_table doesn't
+// belong there because we wrapped it in memo_context.
+// Also the helpers for indirect-recursion...
 
 namespace cppcmb {
 
@@ -193,7 +198,7 @@ namespace cppcmb {
 
     } /* namespace detail */
 
-    class memo_table;
+    class memo_context;
 
     /**
      * The structure that reads from the source element-wise.
@@ -208,22 +213,22 @@ namespace cppcmb {
         );
 
     private:
-        Src const*  m_Source;
-        std::size_t m_Cursor;
-        memo_table* m_MemoTable;
+        Src const*    m_Source;
+        std::size_t   m_Cursor;
+        memo_context* m_MemoCtx;
 
     public:
         using value_type =
             detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
         constexpr reader(
-            Src const& src, std::size_t idx, memo_table* t) noexcept
-            : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoTable(t) {
+            Src const& src, std::size_t idx, memo_context* t) noexcept
+            : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {
             seek(idx);
         }
 
         constexpr reader(
-            Src const& src, std::size_t idx, memo_table& t) noexcept
+            Src const& src, std::size_t idx, memo_context& t) noexcept
             : reader(src, idx, &t) {
         }
 
@@ -233,12 +238,12 @@ namespace cppcmb {
         }
 
         constexpr reader(
-            Src const& src, memo_table& t) noexcept
+            Src const& src, memo_context& t) noexcept
             : reader(src, 0U, t) {
         }
 
         // Just to avoid nasty bugs
-        reader(Src const&& src, std::size_t idx, memo_table* t) = delete;
+        reader(Src const&& src, std::size_t idx, memo_context* t) = delete;
 
         [[nodiscard]] constexpr auto const& source() const noexcept {
             return *m_Source;
@@ -273,16 +278,16 @@ namespace cppcmb {
             seek(cursor() + 1);
         }
 
-        [[nodiscard]] constexpr auto* memo_ptr() const noexcept {
-            return m_MemoTable;
+        [[nodiscard]] constexpr auto* context_ptr() const noexcept {
+            return m_MemoCtx;
         }
 
-        [[nodiscard]] constexpr auto& memo() const noexcept {
+        [[nodiscard]] constexpr auto& context() const noexcept {
             cppcmb_assert(
-                "A memo-table must be assigned before accessing it!",
-                m_MemoTable != nullptr
+                "A memo-context must be assigned before accessing it!",
+                m_MemoCtx != nullptr
             );
-            return *memo_ptr();
+            return *context_ptr();
         }
     };
 
@@ -1089,7 +1094,7 @@ static_assert(                                        \
             // Get the success alternative
             auto p1_succ = std::move(p1_inv).success();
             // Create the next reader
-            auto r2 = reader(r.source(), p1_succ.remaining(), r.memo_ptr());
+            auto r2 = reader(r.source(), p1_succ.remaining(), r.context_ptr());
             // Invoke the second parser
             auto p2_inv = m_Second.apply(r2);
             if (p2_inv.is_failure()) {
@@ -1743,10 +1748,17 @@ static_assert(                                        \
                 return m_ID;
             }
 
+            // XXX(LPeter1997): This could be static
+            // XXX(LPeter1997): Noexcept specifier
+            template <typename Src>
+            constexpr auto& context(reader<Src> const& r) const {
+                return r.context();
+            }
+
             // XXX(LPeter1997): Noexcept specifier
             template <typename Src, typename TFwd>
             constexpr auto& put_memo(reader<Src> const& r, TFwd&& val) const {
-                auto& table = r.memo();
+                auto& table = context(r).memo();
                 return table.put(original_id(), r, cppcmb_fwd(val));
             }
 
@@ -1754,7 +1766,7 @@ static_assert(                                        \
             template <typename Src>
             [[nodiscard]]
             constexpr std::any* get_memo(reader<Src> const& r) const {
-                auto& table = r.memo();
+                auto& table = context(r).memo();
                 return table.get(original_id(), r);
             }
         };
@@ -1981,12 +1993,19 @@ static_assert(                                        \
             explicit /* constexpr */ irec_head(std::uintptr_t hid)
                 : m_HeadID(hid) {
             }
+
+            [[nodiscard]]
+            constexpr std::uintptr_t head_id() const noexcept {
+                return m_HeadID;
+            }
+
+            cppcmb_getter(involved_set, m_InvolvedIDSet)
+            cppcmb_getter(eval_set, m_EvalIDSet)
         };
 
-        template <typename T>
         class irec_left_recursive {
         private:
-            T                        m_Seed;
+            std::any                 m_Seed;
             std::uintptr_t           m_ParserID;
             std::optional<irec_head> m_Head;
 
@@ -1996,7 +2015,32 @@ static_assert(                                        \
             constexpr irec_left_recursive(TFwd&& seed, std::uintptr_t pid)
                 : m_Seed(cppcmb_fwd(seed)), m_ParserID(pid) {
             }
+
+            cppcmb_getter(seed, m_Seed)
+            cppcmb_getter(head, m_Head)
+
+            [[nodiscard]] constexpr std::uintptr_t parser_id() const noexcept {
+                return m_ParserID;
+            }
         };
+
+    } /* namespace detail */
+
+    // XXX(LPeter1997): Remove this function! Maybe add a custom type with
+    // this function
+    namespace detail {
+
+        template <typename Coll, typename Val, typename It>
+        constexpr bool contains(Coll const& coll, Val const& v, It& it) {
+            it = coll.find(v);
+            return it == coll.end();
+        }
+
+        template <typename Coll, typename Val>
+        constexpr bool contains(Coll const& coll, Val const& v) {
+            auto it = coll.end();
+            return contains(coll, v, it);
+        }
 
     } /* namespace detail */
 
@@ -2010,11 +2054,148 @@ static_assert(                                        \
         cppcmb_self_check(irec_packrat_t);
 
         using head = detail::irec_head;
-
-        template <typename T>
-        using left_recursive = detail::irec_left_recursive<T>;
+        using left_recursive = detail::irec_left_recursive;
 
         P m_Parser;
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        constexpr auto recall(reader<Src> const& r) const
+            -> std::optional<std::any> {
+
+            using return_t = parser_result_t<P, Src>;
+
+            auto& heads = r.context().call_heads();
+
+            auto* cached = this->get_memo(r);
+            auto* in_heads = heads.get(r);
+
+            if (in_heads == nullptr) {
+                if (cached == nullptr) {
+                    return std::nullopt;
+                }
+                else {
+                    return *cached;
+                }
+            }
+            else {
+                auto& h = *in_heads;
+                auto& involved = h.involved_set();
+
+                if (cached == nullptr && !(
+                       this->original_id() == h.head_id()
+                    || detail::contains(h.involved_set(), this->original_id())
+                )) {
+                    return return_t(failure(r.cursor()));
+                }
+
+                auto it = h.eval_set().end();
+                if (detail::contains(h.eval_set(), this->original_id(), it)) {
+                    // Remove the rule id from the evaluation id set of the head
+                    h.eval_set().erase(it);
+                    auto tmp_res = m_Parser.apply(r);
+                    *cached = tmp_res;
+                }
+
+                return *cached;
+            }
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        constexpr void setup_lr(
+            reader<Src> const& r,
+            left_recursive& rec_detect) const {
+
+            if (!rec_detect.head()) {
+                rec_detect.head() = head(this->original_id());
+            }
+            auto& lr_stack = r.context().call_stack();
+            for (
+                auto it = lr_stack.begin();
+                   it != lr_stack.end()
+                && (*it)->parser_id() != this->original_id();
+                ++it) {
+                (*it)->head() = rec_detect.head();
+                rec_detect.head()->involved_set().insert((*it)->parser_id());
+            }
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        constexpr decltype(auto) lr_answer(
+            reader<Src> const& r,
+            left_recursive& growable) const {
+
+            using return_t = parser_result_t<P, Src>;
+            cppcmb_assert(
+                "The growable must contain a head!",
+                growable.head().has_value()
+            );
+
+            auto& h = *growable.head();
+            auto& seed = std::any_cast<return_t>(growable.seed());
+
+            if (h.head_id() != this->original_id()) {
+                return seed;
+            }
+            else {
+                auto& s = this->put_memo(r, seed);
+                if (s.is_failure()) {
+                    return s;
+                }
+                else {
+                    return grow(r, s, h);
+                }
+            }
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        constexpr decltype(auto) grow(
+            reader<Src> const& r,
+            parser_result_t<P, Src>& old_res,
+            head& h) const {
+
+            using return_t = parser_result_t<P, Src>;
+
+            auto& rec_heads = r.context().call_heads();
+
+            rec_heads[r] = &h;
+            h.eval_set() = h.involved_set();
+
+            std::size_t old_cur = r.cursor();
+            if (old_res.is_success()) {
+                old_cur = old_res.success().remaining();
+            }
+
+            auto tmp_res = m_Parser.apply(r);
+            if (tmp_res.is_success()) {
+                auto& tmp_succ = tmp_res.success();
+                if (old_cur < tmp_succ.remaining()) {
+                    auto& new_old = this->put_memo(r, tmp_res);
+                    return grow(r, new_old, h);
+                }
+                else {
+                    auto it = rec_heads.find(r);
+                    cppcmb_assert("", it != rec_heads.end());
+                    rec_heads.erase(it);
+
+                    auto* val = this->get_memo(r);
+                    cppcmb_assert("", val != nullptr);
+
+                    return std::any_cast<return_t&>(*val);
+                }
+            }
+            else {
+                auto it = rec_heads.find(r);
+                cppcmb_assert("", it != rec_heads.end());
+                rec_heads.erase(it);
+
+                return old_res;
+            }
+        }
+        // XXX(LPeter1997): LR answer, grow
 
     public:
         template <typename PFwd,
@@ -2030,10 +2211,39 @@ static_assert(                                        \
         constexpr decltype(auto) apply(reader<Src> const& r) const {
             cppcmb_assert_parser(P, Src);
 
-            using apply_t = parser_result_t<P, Src>;
-            using left_rec = left_recursive<apply_t>;
+            using return_t = parser_result_t<P, Src>;
 
-            // XXX(LPeter1997): Implement
+            auto& lr_stack = r.context().call_stack();
+
+            auto m = recall(r);
+            if (!m) {
+                auto base = std::make_shared<left_recursive>(
+                    return_t(failure(r.cursor()), this->original_id())
+                );
+                lr_stack.push_front(base);
+                this->put_memo(r, base);
+                auto tmp_res = m_Parser.apply(r);
+                lr_stack.pop_front();
+
+                if (!base->head()) {
+                    return this->put_memo(r, tmp_res);
+                }
+                else {
+                    base->seed() = tmp_res;
+                    return lr_answer(r, *base);
+                }
+            }
+            else {
+                auto& entry = *m;
+                if (auto* lr =
+                    std::any_cast<std::shared_ptr<left_recursive>>(&entry)) {
+                    setup_lr(r, *lr);
+                    return std::any_cast<return_t&>(lr->seed());
+                }
+                else {
+                    return std::any_cast<return_t&>(entry);
+                }
+            }
         }
     };
 
@@ -2046,6 +2256,58 @@ static_assert(                                        \
     template <typename PFwd>
     [[nodiscard]] constexpr auto memo_i(PFwd&& p)
         cppcmb_return(irec_packrat_t(cppcmb_fwd(p)))
+
+    /**
+     * A type to track call-heads.
+     */
+    class call_head_table {
+    private:
+        std::unordered_map<std::size_t, detail::irec_head*> m_Heads;
+
+    public:
+        // XXX(LPeter1997): Noexcept specifier
+        [[nodiscard]]
+        /* constexpr */ detail::irec_head* get(std::size_t n) const {
+            auto it = m_Heads.find(n);
+            if (it == m_Heads.end()) {
+                return nullptr;
+            }
+            else {
+                return it->second;
+            }
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        template <typename Src>
+        [[nodiscard]]
+        /* constexpr */ detail::irec_head* get(reader<Src> const& r) const {
+            return get(r.cursor());
+        }
+    };
+
+    class call_stack {
+    private:
+        std::deque<std::shared_ptr<detail::irec_left_recursive>> m_Stack;
+
+    public:
+        // XXX(LPeter1997): Implement
+    };
+
+    /**
+     * A tuple of helper-types that the memorizing parsers can use for
+     * memorization and direct/indirect recursion.
+     */
+    class memo_context {
+    private:
+        memo_table      m_MemoTable;
+        call_head_table m_RecursionHeads;
+        call_stack      m_LrStack;
+
+    public:
+        cppcmb_getter(memo, m_MemoTable)
+        cppcmb_getter(call_heads, m_RecursionHeads)
+        cppcmb_getter(call_stack, m_LrStack)
+    };
 
     /**
      * Here we provide operator%= to turn a parser into packrat parsers.
