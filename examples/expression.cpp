@@ -1,171 +1,82 @@
-#include <cassert>
-#include <cmath>
-#include <cstdio>
 #include <cctype>
-#include <string>
-#include <vector>
+#include <cmath>
+#include <iostream>
+#include <string_view>
 #include "../cppcmb.hpp"
 
-struct token {
-	enum type {
-		num,
-		expon,
-		add, sub, mul, div, lparen, rparen,
-		eps
-	};
+namespace pc = cppcmb;
 
-	type ty;
-	std::string val;
+template <char Ch>
+bool is_same_char(char c) { return c == Ch; }
 
-	explicit token(type ty)
-		: ty(ty) {
-	}
+template <char Ch>
+inline constexpr auto match = pc::one[pc::filter(is_same_char<Ch>)];
 
-	explicit token(type ty, std::string const& val)
-		: ty(ty), val(val) {
-	}
-};
-
-// Hacky lexer /////////////////////////////////////////////////////////////////
-
-std::vector<token> lex(char const* src) {
-	std::vector<token> res;
-begin:
-	switch (*src) {
-	case '\0': res.push_back(token(token::eps)); return res;
-	case ' ': ++src; goto begin;
-	case '^': res.push_back(token(token::expon)); ++src; goto begin;
-	case '+': res.push_back(token(token::add)); ++src; goto begin;
-	case '-': res.push_back(token(token::sub)); ++src; goto begin;
-	case '*': res.push_back(token(token::mul)); ++src; goto begin;
-	case '/': res.push_back(token(token::div)); ++src; goto begin;
-	case '(': res.push_back(token(token::lparen)); ++src; goto begin;
-	case ')': res.push_back(token(token::rparen)); ++src; goto begin;
-
-	default:
-		if (std::isdigit(*src)) {
-			std::string v = "";
-			while (std::isdigit(*src)) {
-				v += *src++;
-			}
-			res.push_back(token(token::num, v));
-			goto begin;
-		}
-		else {
-			assert(false && "Unknown!");
-		}
-	}
-	assert(false && "Unreachable!");
-	return res;
+int do_op(int x, char ch, int y) {
+    switch (ch) {
+    case '+': return x + y;
+    case '-': return x - y;
+    case '*': return x * y;
+    case '/': return x / y;
+    case '^': return (int)std::pow(x, y); // For simplicity
+	default: return 0;
+    }
 }
 
-// AST /////////////////////////////////////////////////////////////////////////
-
-struct expr_t {
-	virtual double eval() const = 0;
-};
-
-struct num_expr_t : public expr_t {
-	int val;
-
-	explicit num_expr_t(token const& tok)
-		: val(std::stoi(tok.val)) {
-	}
-
-	virtual double eval() const override {
-		return double(val);
-	}
-};
-
-struct bin_expr_t : public expr_t {
-	token::type op;
-	expr_t* left;
-	expr_t* right;
-
-	explicit bin_expr_t(token::type op, expr_t* l, expr_t* r)
-		: op(op), left(l), right(r) {
-	}
-
-	virtual double eval() const override {
-		auto l = left->eval();
-		auto r = right->eval();
-
-		switch (op) {
-		case token::add: return l + r;
-		case token::sub: return l - r;
-		case token::mul: return l * r;
-		case token::div: return l / r;
-		case token::expon: return std::pow(l, r);
-
-		default: assert(false);
-		}
-		return 0.0;
-	}
-};
-
-// Actual library usage ////////////////////////////////////////////////////////
-
-using token_iterator = typename std::vector<token>::const_iterator;
-using pt = cppcmb::combinator_types<token_iterator>;
-using pv = cppcmb::combinator_values<token_iterator>;
-
-// Token matching predicate
-template <token::type Expected_Type>
-constexpr bool match_predicate(token const& tok) {
-	return tok.ty == Expected_Type;
+int to_num(std::vector<char> const& chs) {
+    int n = 0;
+    for (auto c : chs) n = n * 10 + (c - '0');
+    return n;
 }
 
-// Template-style
-template <token::type Expected_Type>
-using term_t = pt::map<pt::one, pt::filter<pt::fn<match_predicate<Expected_Type>>>>;
+cppcmb_decl(expr,  int);
+cppcmb_decl(mul,   int);
+cppcmb_decl(expon, int);
+cppcmb_decl(atom,  int);
+cppcmb_decl(num,   int);
+cppcmb_decl(digit, char);
 
-// Value-style
-template <token::type Expected_Type>
-static constexpr auto term_v = pv::one[pv::filter(pv::fn<match_predicate<Expected_Type>>)];
+cppcmb_def(expr) = pc::pass
+    | (expr & match<'+'> & mul) [do_op]
+    | (expr & match<'-'> & mul) [do_op]
+    | mul
+    %= pc::as_memo_d;
 
-expr_t* to_int_expr(token const& num) {
-	return new num_expr_t(num);
-}
+cppcmb_def(mul) = pc::pass
+    | (mul & match<'*'> & expon) [do_op]
+    | (mul & match<'/'> & expon) [do_op]
+    | expon
+    %= pc::as_memo_d;
 
-// Left-folding variant
-expr_t* to_bin_expr_l(expr_t* left, std::tuple<token, expr_t*> const& right) {
-	return new bin_expr_t(std::get<0>(right).ty, left, std::get<1>(right));
-}
+cppcmb_def(expon) = pc::pass
+    | (atom & match<'^'> & expon) [do_op]
+    | atom
+    %= pc::as_memo_d;
 
-// Right-folding variant
-expr_t* to_bin_expr_r(std::tuple<expr_t*, token> const& left, expr_t* right) {
-	return new bin_expr_t(std::get<1>(left).ty, std::get<0>(left), right);
-}
+cppcmb_def(atom) = pc::pass
+    | (match<'('> & expr & match<')'>) [pc::select<1>]
+    | num
+    %= pc::as_memo_d;
 
-pv::result_type<expr_t*> expression(token_iterator it) {
-	constexpr auto atomic =
-		  (term_v<token::lparen> & pv::cmb<expression> & term_v<token::rparen>)[pv::select<1>]
-		| term_v<token::num>[pv::fn<to_int_expr>]
-		;
-	constexpr auto exponentiation =
-		(*(atomic & term_v<token::expon>) & atomic)[pv::foldr(pv::fn<to_bin_expr_r>)]
-		;
-	constexpr auto multiplication =
-		(exponentiation & *((term_v<token::mul> | term_v<token::div>) & exponentiation))[pv::foldl(pv::fn<to_bin_expr_l>)]
-		;
-	constexpr auto addition =
-		(multiplication & *((term_v<token::add> | term_v<token::sub>) & multiplication))[pv::foldl(pv::fn<to_bin_expr_l>)]
-		;
-	return addition(it);
-}
+cppcmb_def(num) =
+      (+digit) [to_num]
+    ;
+
+cppcmb_def(digit) = pc::one[pc::filter(isdigit)];
 
 int main() {
-	auto tokens = lex("2*(1+2)^3+1-2+3");
-	auto parser = pv::cmb<expression>;
-	auto result = parser(std::cbegin(tokens));
+    auto parser = pc::parser(expr);
+    std::string line;
 
-	if (result) {
-		std::puts("Success!");
-		std::printf("Evaluates to: %lf\n", result->first->eval());
-	}
-	else {
-		std::puts("Fail!");
-	}
+    while (std::getline(std::cin, line)) {
+        auto res = parser.parse(line);
+        if (res.is_success()) {
+            std::cout << "Result = " << res.success().value() << std::endl;
+        }
+        else {
+            std::cout << "Failed to parse expression!" << std::endl;
+        }
+    }
 
-	return 0;
+    return 0;
 }
