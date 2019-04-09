@@ -1,7 +1,13 @@
+/**
+ * A simple expression parser and evaluator. Evaluates user-input.
+ * Supports +, -, *, /, ^ and grouping with parenthesis.
+ * Correctly handles precedence associativity.
+ */
+
 #include <cctype>
 #include <cmath>
 #include <iostream>
-#include <string_view>
+#include <string>
 #include "../cppcmb.hpp"
 
 namespace pc = cppcmb;
