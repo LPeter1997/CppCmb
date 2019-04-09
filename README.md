@@ -2,7 +2,7 @@
 
 # What is CppCmb?
 
-CppCmb is a [single-header](https://github.com/LPeter1997/CppCmb/blob/master/cppcmb.hpp) C++17 monadic parser-combinator library that aims for genericity and performance.
+CppCmb is a [single-header](https://github.com/LPeter1997/CppCmb/blob/master/cppcmb.hpp) C++17 monadic parser-combinator library that aims for genericity and simplicity. It tries to get very close to grammar notations, like BNF.
 
 # How do I compile/install it?
 
@@ -21,4 +21,5 @@ You can open issues, or do a pull-request if you've implemented/fixed something.
 * Test and make it work on MSVC (currently only worked with GCC, untested on everything else)
 
 # Roadmap:
-* Need error reporting and a way to describe parsers to the user
+* Error reporting and a way to describe parsers to the user
+* Incremental parsing
