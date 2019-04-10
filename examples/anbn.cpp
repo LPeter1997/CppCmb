@@ -16,9 +16,14 @@ template <char Ch>
 inline constexpr auto match = pc::one[pc::filter(is_same_char<Ch>)];
 
 cppcmb_decl(anbn, pc::product<>);
+cppcmb_decl(anbn_impl, pc::product<>);
 
-cppcmb_def(anbn) = pc::pass
-    | (match<'a'> & anbn & match<'b'>) [pc::select<>]
+cppcmb_def(anbn) =
+      anbn_impl & pc::end
+    ;
+
+cppcmb_def(anbn_impl) = pc::pass
+    | (match<'a'> & anbn_impl & match<'b'>) [pc::select<>]
     | (match<'a'> & match<'b'>) [pc::select<>]
     ;
 

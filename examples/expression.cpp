@@ -35,12 +35,17 @@ int to_num(std::vector<char> const& chs) {
     return n;
 }
 
-cppcmb_decl(expr,  int);
-cppcmb_decl(mul,   int);
-cppcmb_decl(expon, int);
-cppcmb_decl(atom,  int);
-cppcmb_decl(num,   int);
-cppcmb_decl(digit, char);
+cppcmb_decl(expr_top, int);
+cppcmb_decl(expr,     int);
+cppcmb_decl(mul,      int);
+cppcmb_decl(expon,    int);
+cppcmb_decl(atom,     int);
+cppcmb_decl(num,      int);
+cppcmb_decl(digit,    char);
+
+cppcmb_def(expr_top) =
+      expr & pc::end
+    ;
 
 cppcmb_def(expr) = pc::pass
     | (expr & match<'+'> & mul) [do_op]
@@ -71,7 +76,7 @@ cppcmb_def(num) =
 cppcmb_def(digit) = pc::one[pc::filter(isdigit)];
 
 int main() {
-    auto parser = pc::parser(expr);
+    auto parser = pc::parser(expr_top);
     std::string line;
 
     while (std::getline(std::cin, line)) {
