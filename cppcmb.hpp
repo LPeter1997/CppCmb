@@ -332,6 +332,7 @@ namespace cppcmb {
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename TFwd>
     success(TFwd&&, std::size_t) -> success<detail::remove_cvref_t<TFwd>>;
 
@@ -2627,6 +2628,7 @@ static_assert(                                        \
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PredFwd>
     filter(PredFwd&&) -> filter<std::decay_t<PredFwd>>;
 
@@ -2676,6 +2678,7 @@ static_assert(                                        \
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     parser(PFwd&&) -> parser<detail::remove_cvref_t<PFwd>>;
 
