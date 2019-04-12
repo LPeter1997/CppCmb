@@ -100,6 +100,16 @@ static constexpr bool is_self_v =                                 \
 // belong there because we wrapped it in memo_context.
 // Also the helpers for indirect-recursion...
 
+// XXX(LPeter1997): Simplify CTAD deduction guidelines
+// Deduction guide is separate from cror, so we don't need remove_cvref_t-s
+
+// XXX(LPeter1997): We could make many and many1 right recursive!
+// It would simplify implementation and allow incremental parsing to benefit
+// from individual list elements
+
+// XXX(LPeter1997): We can simplify at a lot of places just by returning result
+// Instead if dissecting it to success/failure and reconstructing
+
 namespace cppcmb {
 
     namespace detail {
@@ -304,21 +314,21 @@ namespace cppcmb {
         cppcmb_self_check(success);
 
         value_type  m_Value;
-        std::size_t m_Remaining;
+        std::size_t m_Matched;
 
     public:
         template <typename TFwd,
             cppcmb_requires_t(!is_self_v<TFwd>)>
-        constexpr success(TFwd&& val, std::size_t rem)
+        constexpr success(TFwd&& val, std::size_t matched)
             // XXX(LPeter1997): Bug in GCC?
             // noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
-            : m_Value(cppcmb_fwd(val)), m_Remaining(rem) {
+            : m_Value(cppcmb_fwd(val)), m_Matched(matched) {
         }
 
         cppcmb_getter(value, m_Value)
 
-        [[nodiscard]] constexpr auto const& remaining() const noexcept {
-            return m_Remaining;
+        [[nodiscard]] constexpr auto const& matched() const noexcept {
+            return m_Matched;
         }
     };
 
@@ -329,19 +339,7 @@ namespace cppcmb {
      * Failure "type-constructor". The type that the parser returns when it
      * fails.
      */
-    class failure {
-    private:
-        std::size_t m_Furthest;
-
-    public:
-        constexpr failure(std::size_t furth) noexcept
-            : m_Furthest(furth) {
-        }
-
-        [[nodiscard]] constexpr auto const& furthest() const noexcept {
-            return m_Furthest;
-        }
-    };
+    class failure { };
 
     namespace detail {
 
@@ -370,13 +368,14 @@ namespace cppcmb {
         using either_type = std::variant<success_type, failure_type>;
 
         either_type m_Data;
+        std::size_t m_Furthest;
 
     public:
         template <typename TFwd,
             cppcmb_requires_t(!is_self_v<TFwd>)>
-        constexpr result(TFwd&& val)
+        constexpr result(TFwd&& val, std::size_t furthest)
             noexcept(std::is_nothrow_constructible_v<either_type, TFwd&&>)
-            : m_Data(cppcmb_fwd(val)) {
+            : m_Data(cppcmb_fwd(val)), m_Furthest(furthest) {
         }
 
         [[nodiscard]] constexpr bool is_success() const noexcept {
@@ -389,7 +388,14 @@ namespace cppcmb {
 
         cppcmb_getter(success, std::get<success_type>(m_Data))
         cppcmb_getter(failure, std::get<failure_type>(m_Data))
+
+        [[nodiscard]] constexpr auto const& furthest() const noexcept {
+            return m_Furthest;
+        }
     };
+
+    // template <typename TFwd>
+    // result(TFwd, std::size_t) -> result<TFwd>;
 
     namespace detail {
 
@@ -1028,10 +1034,12 @@ static_assert(                                        \
             reader<Src> const& src,
             std::true_type) const -> result<maybe_value_t<FRes>> {
 
+            using result_t = result<maybe_value_t<FRes>>;
+
             auto inv = m_Parser.apply(src);
             if (inv.is_failure()) {
                 // Early failure
-                return std::move(inv).failure();
+                return result_t(std::move(inv).failure(), inv.furthest());
             }
 
             auto succ = std::move(inv).success();
@@ -1039,12 +1047,14 @@ static_assert(                                        \
             auto act_inv = apply_fn(std::move(succ).value());
             // In any case we will have to decorate the result with the position
             if (act_inv.is_none()) {
-                return failure(src.cursor());
+                return result_t(failure(), inv.furthest());
             }
             else {
-                return success(
-                    std::move(act_inv).some().value(),
-                    succ.remaining()
+                return result_t(
+                    success(
+                        std::move(act_inv).some().value(), succ.matched()
+                    ),
+                    inv.furthest()
                 );
             }
         }
@@ -1059,14 +1069,20 @@ static_assert(                                        \
             auto inv = m_Parser.apply(src);
             if (inv.is_failure()) {
                 // Early failure
-                return std::move(inv).failure();
+                return result<FRes>(
+                    std::move(inv).failure(),
+                    inv.furthest()
+                );
             }
 
             auto succ = std::move(inv).success();
             // Apply the action
             auto act_val = apply_fn(std::move(succ).value());
             // Wrap it in a success
-            return success(std::move(act_val), succ.remaining());
+            return result<FRes>(
+                success(std::move(act_val), succ.matched()),
+                inv.furthest()
+            );
         }
 
         // Invoke the function with a value
@@ -1076,6 +1092,7 @@ static_assert(                                        \
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd, typename FnFwd>
     action_t(PFwd&&, FnFwd&&) -> action_t<
         detail::remove_cvref_t<PFwd>,
@@ -1093,12 +1110,14 @@ static_assert(                                        \
         [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
             -> result<typename reader<Src>::value_type> {
 
+            using result_t = result<typename reader<Src>::value_type>;
+
             if (r.is_end()) {
                 // Nothing to consume
-                return failure(r.cursor());
+                return result_t(failure(), 0U);
             }
             else {
-                return success(r.current(), r.cursor() + 1);
+                return result_t(success(r.current(), 1U), 0U);
             }
         }
     };
@@ -1118,10 +1137,10 @@ static_assert(                                        \
 
             if (r.is_end()) {
                 // XXX(LPeter1997): GCC bug?
-                return success(product<>(), r.cursor());
+                return result<product<>>(success(product<>(), 0U), 0U);
             }
             else {
-                return failure(r.cursor());
+                return result<product<>>(failure(), 0U);
             }
         }
     };
@@ -1162,34 +1181,46 @@ static_assert(                                        \
             cppcmb_assert_parser(P1, Src);
             cppcmb_assert_parser(P2, Src);
 
+            using result_t = result<value_t<Src>>;
+
             auto p1_inv = m_First.apply(r);
             if (p1_inv.is_failure()) {
                 // Early failure, don't continue
-                return std::move(p1_inv).failure();
+                return result_t(std::move(p1_inv).failure(), p1_inv.furthest());
             }
             // Get the success alternative
             auto p1_succ = std::move(p1_inv).success();
             // Create the next reader
-            auto r2 = reader(r.source(), p1_succ.remaining(), r.context_ptr());
+            auto r2 = reader(
+                r.source(), r.cursor() + p1_succ.matched(), r.context_ptr()
+            );
             // Invoke the second parser
             auto p2_inv = m_Second.apply(r2);
             if (p2_inv.is_failure()) {
                 // Second failed, fail on that error
-                return std::move(p2_inv).failure();
+                return result_t(
+                    std::move(p2_inv).failure(),
+                    p1_succ.matched() + p2_inv.furthest()
+                );
             }
             // Get the success alternative
             auto p2_succ = std::move(p2_inv).success();
             // Combine the values
-            return success(
-                product_values(
-                    std::move(p1_succ).value(),
-                    std::move(p2_succ).value()
+            return result_t(
+                success(
+                    product_values(
+                        std::move(p1_succ).value(),
+                        std::move(p2_succ).value()
+                    ),
+                    p1_succ.matched() + p2_succ.matched()
                 ),
-                p2_succ.remaining()
+                // XXX(LPeter1997): Maybe not this?
+                p1_succ.matched() + p2_inv.furthest()
             );
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename P1Fwd, typename P2Fwd>
     seq_t(P1Fwd&&, P2Fwd&&) -> seq_t<
         detail::remove_cvref_t<P1Fwd>,
@@ -1252,13 +1283,18 @@ static_assert(                                        \
             cppcmb_assert_parser(P1, Src);
             cppcmb_assert_parser(P2, Src);
 
+            using result_t = result<value_t<Src>>;
+
             // Try to apply the first alternative
             auto p1_inv = m_First.apply(r);
             if (p1_inv.is_success()) {
                 auto p1_succ = std::move(p1_inv).success();
-                return success(
-                    sum_values<value_t<Src>>(std::move(p1_succ).value()),
-                    p1_succ.remaining()
+                return result_t(
+                    success(
+                        sum_values<value_t<Src>>(std::move(p1_succ).value()),
+                        p1_succ.matched()
+                    ),
+                    p1_inv.furthest()
                 );
             }
 
@@ -1266,9 +1302,12 @@ static_assert(                                        \
             auto p2_inv = m_Second.apply(r);
             if (p2_inv.is_success()) {
                 auto p2_succ = std::move(p2_inv).success();
-                return success(
-                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
-                    p2_succ.remaining()
+                return result_t(
+                    success(
+                        sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                        p2_succ.matched()
+                    ),
+                    std::max(p1_inv.furthest(), p2_inv.furthest())
                 );
             }
 
@@ -1276,20 +1315,21 @@ static_assert(                                        \
             auto p1_err = std::move(p1_inv).failure();
             auto p2_err = std::move(p2_inv).failure();
 
-            if (p1_err.furthest() > p2_err.furthest()) {
-                return p1_err;
+            if (p1_inv.furthest() > p2_inv.furthest()) {
+                return result_t(std::move(p1_err), p1_inv.furthest());
             }
-            else if (p1_err.furthest() < p2_err.furthest()) {
-                return p2_err;
+            else if (p1_inv.furthest() < p2_inv.furthest()) {
+                return result_t(std::move(p2_err), p2_inv.furthest());
             }
             else {
                 // They got to the same distance, need to merge errors
                 // XXX(LPeter1997): Implement, for now we just return the first
-                return p1_err;
+                return result_t(std::move(p1_err), p1_inv.furthest());
             }
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename P1Fwd, typename P2Fwd>
     alt_t(P1Fwd&&, P2Fwd&&) -> alt_t<
         detail::remove_cvref_t<P1Fwd>,
@@ -1345,9 +1385,13 @@ static_assert(                                        \
             cppcmb_assert_parser(P1, Src);
             cppcmb_assert_parser(P2, Src);
 
+            using result_t = result<value_t<Src>>;
+
             // Try to apply both alternatives
             auto p1_inv = m_First.apply(r);
             auto p2_inv = m_Second.apply(r);
+
+            auto furthest = std::max(p1_inv.furthest(), p2_inv.furthest());
 
             // Both succeeded
             if (p1_inv.is_success() && p2_inv.is_success()) {
@@ -1356,54 +1400,55 @@ static_assert(                                        \
                 auto p1_succ = std::move(p1_inv).success();
                 auto p2_succ = std::move(p2_inv).success();
 
-                if (p1_succ.remaining() >= p2_succ.remaining()) {
-                    return success(
+                if (p1_succ.matched() >= p2_succ.matched()) {
+                    return result_t(success(
                         sum_values<value_t<Src>>(std::move(p1_succ).value()),
-                        p1_succ.remaining()
-                    );
+                        p1_succ.matched()
+                    ), furthest);
                 }
                 else {
-                    return success(
+                    return result_t(success(
                         sum_values<value_t<Src>>(std::move(p2_succ).value()),
-                        p2_succ.remaining()
-                    );
+                        p2_succ.matched()
+                    ), furthest);
                 }
             }
             // LHS succeeded
             if (p1_inv.is_success()) {
                 auto p1_succ = std::move(p1_inv).success();
-                return success(
+                return result_t(success(
                     sum_values<value_t<Src>>(std::move(p1_succ).value()),
                     p1_succ.remaining()
-                );
+                ), furthest);
             }
             // RHS succeeded
             if (p2_inv.is_success()) {
                 auto p2_succ = std::move(p2_inv).success();
-                return success(
+                return result_t(success(
                     sum_values<value_t<Src>>(std::move(p2_succ).value()),
                     p2_succ.remaining()
-                );
+                ), furthest);
             }
 
             // Both failed, return the error which got further
             auto p1_err = std::move(p1_inv).failure();
             auto p2_err = std::move(p2_inv).failure();
 
-            if (p1_err.furthest() > p2_err.furthest()) {
-                return p1_err;
+            if (p1_inv.furthest() > p2_inv.furthest()) {
+                return result_t(std::move(p1_err), furthest);
             }
-            else if (p1_err.furthest() < p2_err.furthest()) {
-                return p2_err;
+            else if (p1_inv.furthest() < p2_inv.furthest()) {
+                return result_t(std::move(p2_err), furthest);
             }
             else {
                 // They got to the same distance, need to merge errors
                 // XXX(LPeter1997): Implement, for now we just return the first
-                return p1_err;
+                return result_t(std::move(p1_err), furthest);
             }
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename P1Fwd, typename P2Fwd>
     eager_alt_t(P1Fwd&&, P2Fwd&&) -> eager_alt_t<
         detail::remove_cvref_t<P1Fwd>,
@@ -1504,24 +1549,31 @@ static_assert(                                        \
             -> result<value_t<Src>> {
             cppcmb_assert_parser(P, Src);
 
+            using result_t = result<value_t<Src>>;
+
+            std::size_t furthest = 0U;
+            std::size_t matched = 0U;
             auto coll = value_t<Src>();
             auto rr = r;
             while (true) {
                 auto p_inv = m_Parser.apply(rr);
+                furthest = std::max(furthest, p_inv.furthest());
                 if (p_inv.is_failure()) {
                     // Stop applying
                     break;
                 }
                 auto p_succ = std::move(p_inv).success();
+                matched += p_succ.matched();
                 // Add to collection
                 coll.push_back(std::move(p_succ).value());
                 // Move reader
-                rr.seek(p_succ.remaining());
+                rr.seek(rr.cursor() + p_succ.matched());
             }
-            return success(std::move(coll), rr.cursor());
+            return result_t(success(std::move(coll), matched), furthest);
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     many_t(PFwd&&) -> many_t<detail::remove_cvref_t<PFwd>>;
 
@@ -1575,6 +1627,8 @@ static_assert(                                        \
             -> result<value_t<Src>> {
             cppcmb_assert_parser(P, Src);
 
+            using result_t = result<value_t<Src>>;
+
             auto p_inv = m_Parser.apply(r);
 
             cppcmb_assert(
@@ -1585,15 +1639,16 @@ static_assert(                                        \
             auto p_succ = std::move(p_inv).success();
             if (p_succ.value().size() > 0) {
                 // Succeed
-                return p_succ;
+                return result_t(std::move(p_succ), p_inv.furthest());
             }
             else {
                 // Fail
-                return failure(r.cursor());
+                return result_t(failure(), p_inv.furthest());
             }
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     many1_t(PFwd&&) -> many1_t<detail::remove_cvref_t<PFwd>>;
 
@@ -1642,20 +1697,29 @@ static_assert(                                        \
             -> result<value_t<Src>> {
             cppcmb_assert_parser(P, Src);
 
+            using result_t = result<value_t<Src>>;
+
             auto p_inv = m_Parser.apply(r);
             if (p_inv.is_failure()) {
-                return success(value_t<Src>(none()), r.cursor());
+                return result_t(
+                    success(value_t<Src>(none()), 0U),
+                    p_inv.furthest()
+                );
             }
             else {
                 auto succ = std::move(p_inv).success();
-                return success(
-                    value_t<Src>(some(std::move(succ).value())),
-                    succ.remaining()
+                return result_t(
+                    success(
+                        value_t<Src>(some(std::move(succ).value())),
+                        succ.matched()
+                    ),
+                    p_inv.furthest()
                 );
             }
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     opt_t(PFwd&&) -> opt_t<detail::remove_cvref_t<PFwd>>;
 
@@ -1884,6 +1948,7 @@ static_assert(                                        \
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     packrat_t(PFwd&&) -> packrat_t<detail::remove_cvref_t<PFwd>>;
 
@@ -1949,7 +2014,7 @@ static_assert(                                        \
             auto tmp_res = m_Parser.apply(r);
             if (tmp_res.is_success()) {
                 auto& tmp_succ = tmp_res.success();
-                if (old_succ.remaining() < tmp_succ.remaining()) {
+                if (old_succ.matched() < tmp_succ.matched()) {
                     // We successfully grew the seed
                     auto& new_old = this->put_memo(r, in_rec(tmp_res)).value();
                     return grow(r, new_old);
@@ -1984,7 +2049,7 @@ static_assert(                                        \
             auto* entry = this->get_memo(r);
             if (entry == nullptr) {
                 // Nothing is in the cache yet, write a dummy error
-                this->put_memo(r, base_rec(failure(r.cursor()), true));
+                this->put_memo(r, base_rec(apply_t(failure(), 0U), true));
                 // Now invoke the parser
                 // If it's recursive, the entry must have changed
                 auto tmp_res = m_Parser.apply(r);
@@ -2025,7 +2090,7 @@ static_assert(                                        \
                         // Recursion signal
                         return this->put_memo(
                             r,
-                            in_rec(failure(r.cursor()))
+                            in_rec(apply_t(failure(), 0U))
                         ).value();
                     }
                     else {
@@ -2045,6 +2110,7 @@ static_assert(                                        \
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     drec_packrat_t(PFwd&&) -> drec_packrat_t<detail::remove_cvref_t<PFwd>>;
 
@@ -2149,7 +2215,7 @@ static_assert(                                        \
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src>
-        constexpr auto recall(reader<Src> const& r) const
+        /* constexpr */ auto recall(reader<Src> const& r) const
             -> std::optional<std::any> {
             using return_t = parser_result_t<P, Src>;
 
@@ -2173,7 +2239,7 @@ static_assert(                                        \
                        this->original_id() == h.head_id()
                     || detail::contains(h.involved_set(), this->original_id())
                 )) {
-                    return return_t(failure(r.cursor()));
+                    return return_t(failure(), 0U);
                 }
 
                 auto it = h.eval_set().cend();
@@ -2251,15 +2317,15 @@ static_assert(                                        \
             rec_heads[r] = &h;
             h.eval_set() = h.involved_set();
 
-            std::size_t old_cur = r.cursor();
+            std::size_t old_cur = 0U;
             if (old_res.is_success()) {
-                old_cur = old_res.success().remaining();
+                old_cur = old_res.success().matched();
             }
 
             auto tmp_res = m_Parser.apply(r);
             if (tmp_res.is_success()) {
                 auto& tmp_succ = tmp_res.success();
-                if (old_cur < tmp_succ.remaining()) {
+                if (old_cur < tmp_succ.matched()) {
                     auto& new_old = this->put_memo(r, tmp_res);
                     return grow(r, new_old, h);
                 }
@@ -2305,7 +2371,7 @@ static_assert(                                        \
             auto m = recall(r);
             if (!m) {
                 auto base = std::make_shared<left_recursive>(
-                    return_t(failure(r.cursor())), this->original_id()
+                    return_t(failure(), 0U), this->original_id()
                 );
                 lr_stack.push_front(base);
                 this->put_memo(r, base);
@@ -2334,6 +2400,7 @@ static_assert(                                        \
         }
     };
 
+    // XXX(LPeter1997): Simplify
     template <typename PFwd>
     irec_packrat_t(PFwd&&) -> irec_packrat_t<detail::remove_cvref_t<PFwd>>;
 
