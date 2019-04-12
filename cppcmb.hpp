@@ -1824,7 +1824,7 @@ static_assert(                                        \
     private:
         // pair<parser identifier, position>
         using key_type = std::pair<std::uintptr_t, std::size_t>;
-        using value_type = std::any;
+        using value_type = std::pair<std::any, std::size_t>;
 
         std::unordered_map<
             key_type,
@@ -1840,7 +1840,7 @@ static_assert(                                        \
             if (it == m_Cache.end()) {
                 return nullptr;
             }
-            return &it->second;
+            return &it->second.first;
         }
 
         // XXX(LPeter1997): Noexcept specifier
@@ -1852,18 +1852,22 @@ static_assert(                                        \
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename TFwd>
-        constexpr auto& put(std::uintptr_t pid, std::size_t pos, TFwd&& val) {
+        constexpr auto& put(std::uintptr_t pid, std::size_t pos,
+            TFwd&& val, std::size_t furth) {
+
             using raw_type = detail::remove_cvref_t<TFwd>;
             auto id = std::pair(pid, pos);
-            auto& a = (m_Cache[id] = cppcmb_fwd(val));
-            return std::any_cast<raw_type&>(a);
+            auto& a = (m_Cache[id] = std::pair(cppcmb_fwd(val), furth));
+            return std::any_cast<raw_type&>(a.first);
         }
 
         // XXX(LPeter1997): Noexcept specifier
         template <typename Src, typename TFwd>
         constexpr auto&
-        put(std::uintptr_t pid, reader<Src> const& r, TFwd&& val) {
-            return put(pid, r.cursor(), cppcmb_fwd(val));
+        put(std::uintptr_t pid, reader<Src> const& r,
+            TFwd&& val, std::size_t furth) {
+
+            return put(pid, r.cursor(), cppcmb_fwd(val), furth);
         }
 
         // XXX(LPeter1997): Noexcept specifier
@@ -1872,8 +1876,7 @@ static_assert(                                        \
         }
 
         // XXX(LPeter1997): Noexcept specifier
-        // XXX(LPeter1997): We possibly don't need inserted
-        void invalidate(std::size_t start, std::size_t rem, std::size_t /* ins */) {
+        void invalidate(std::size_t start, std::size_t rem, std::size_t ins) {
             // start: Position of the source we are manipulating
             // rem: Removed length
             // ins: Inserted length
@@ -1887,7 +1890,7 @@ static_assert(                                        \
                 auto r_from = it->first.second;
                 // XXX(LPeter1997): Solve this
                 // Maybe redundantly store it
-                auto r_furthest = /* somehow access furthest ??? */;
+                auto r_furthest = it->second.second;
                 auto r_to = r_from + r_furthest;
 
                 // [f_from; r_to) is the entry's interval
@@ -1900,9 +1903,38 @@ static_assert(                                        \
                     ++it;
                 }
                 else {
+                    // Overlapping
                     it = m_Cache.erase(it);
                 }
             }
+
+            // XXX(LPeter1997): THIS IS HORRIBLE FOR PERFORMANCE
+            // WE ARE REMOVING THEN PUTTING BACK EVERY ENTRY THAT IS AFTER THE
+            // EDIT
+            // XXX(LPeter1997): This is a very ineffective implementation right
+            // now. It's just to test the algorithm itself
+            std::intptr_t diff = std::intptr_t(ins) - std::intptr_t(rem);
+            // Collect and erase entries that need to be shifted
+            std::vector<std::pair<key_type, value_type>> to_shift;
+            for (auto it = m_Cache.begin(); it != m_Cache.end();) {
+                auto r_from = it->first.second;
+                if (r_from >= start) {
+                    to_shift.push_back({
+                        { it->first.first, it->first.second },
+                        std::move(it->second)
+                    });
+                    it = m_Cache.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
+            // Re-insert the entries
+            for (auto& [k, v] : to_shift) {
+                auto& [p_id, pos] = k;
+                m_Cache.insert({ { p_id, pos + diff }, std::move(v) });
+            }
+            // END OF UNGODLY INEFFICIENT CODE
         }
     };
 
@@ -1931,9 +1963,10 @@ static_assert(                                        \
 
             // XXX(LPeter1997): Noexcept specifier
             template <typename Src, typename TFwd>
-            constexpr auto& put_memo(reader<Src> const& r, TFwd&& val) const {
+            constexpr auto& put_memo(reader<Src> const& r,
+                TFwd&& val, std::size_t furth) const {
                 auto& table = context(r).memo();
-                return table.put(original_id(), r, cppcmb_fwd(val));
+                return table.put(original_id(), r, cppcmb_fwd(val), furth);
             }
 
             // XXX(LPeter1997): Noexcept specifier
@@ -1975,7 +2008,8 @@ static_assert(                                        \
 
             auto* entry = this->get_memo(r);
             if (entry == nullptr) {
-                return this->put_memo(r, m_Parser.apply(r));
+                auto res = m_Parser.apply(r);
+                return this->put_memo(r, std::move(res), res.furthest());
             }
             else {
                 return std::any_cast<apply_t&>(*entry);
@@ -2051,7 +2085,9 @@ static_assert(                                        \
                 auto& tmp_succ = tmp_res.success();
                 if (old_succ.matched() < tmp_succ.matched()) {
                     // We successfully grew the seed
-                    auto& new_old = this->put_memo(r, in_rec(tmp_res)).value();
+                    auto& new_old = this->put_memo(
+                        r, in_rec(tmp_res), tmp_res.furthest()
+                    ).value();
                     return grow(r, new_old);
                 }
                 else {
@@ -2059,7 +2095,9 @@ static_assert(                                        \
                 }
             }
             else {
-                return this->put_memo(r, in_rec(old_res)).value();
+                return this->put_memo(
+                    r, in_rec(old_res), old_res.furthest()
+                ).value();
             }
         }
 
@@ -2084,7 +2122,7 @@ static_assert(                                        \
             auto* entry = this->get_memo(r);
             if (entry == nullptr) {
                 // Nothing is in the cache yet, write a dummy error
-                this->put_memo(r, base_rec(apply_t(failure(), 0U), true));
+                this->put_memo(r, base_rec(apply_t(failure(), 0U), true), 0U);
                 // Now invoke the parser
                 // If it's recursive, the entry must have changed
                 auto tmp_res = m_Parser.apply(r);
@@ -2098,8 +2136,9 @@ static_assert(                                        \
                 // Check for change
                 if (auto* inr = std::any_cast<in_rec>(entry)) {
                     // We are in recursion
-                    auto& res =
-                        this->put_memo(r, in_rec(std::move(tmp_res))).value();
+                    auto& res = this->put_memo(
+                        r, in_rec(std::move(tmp_res)), tmp_res.furthest()
+                    ).value();
                     return grow(r, res);
                 }
                 else {
@@ -2113,7 +2152,8 @@ static_assert(                                        \
                     );
                     return this->put_memo(
                         r,
-                        base_rec(std::move(tmp_res), false)
+                        base_rec(std::move(tmp_res), false),
+                        tmp_res.furthest()
                     ).first.value();
                 }
             }
@@ -2125,7 +2165,8 @@ static_assert(                                        \
                         // Recursion signal
                         return this->put_memo(
                             r,
-                            in_rec(apply_t(failure(), 0U))
+                            in_rec(apply_t(failure(), 0U)),
+                            0U
                         ).value();
                     }
                     else {
@@ -2328,7 +2369,7 @@ static_assert(                                        \
                 return seed;
             }
             else {
-                auto& s = this->put_memo(r, seed);
+                auto& s = this->put_memo(r, seed, seed.furthest());
                 if (s.is_failure()) {
                     return s;
                 }
@@ -2361,7 +2402,9 @@ static_assert(                                        \
             if (tmp_res.is_success()) {
                 auto& tmp_succ = tmp_res.success();
                 if (old_cur < tmp_succ.matched()) {
-                    auto& new_old = this->put_memo(r, tmp_res);
+                    auto& new_old = this->put_memo(
+                        r, tmp_res, tmp_res.furthest()
+                    );
                     return grow(r, new_old, h);
                 }
                 else {
@@ -2409,12 +2452,12 @@ static_assert(                                        \
                     return_t(failure(), 0U), this->original_id()
                 );
                 lr_stack.push_front(base);
-                this->put_memo(r, base);
+                this->put_memo(r, base, 0U);
                 auto tmp_res = m_Parser.apply(r);
                 lr_stack.pop_front();
 
                 if (!base->head()) {
-                    return this->put_memo(r, tmp_res);
+                    return this->put_memo(r, tmp_res, tmp_res.furthest());
                 }
                 else {
                     base->seed() = tmp_res;
@@ -2712,7 +2755,6 @@ static_assert(                                        \
         }
 
         // XXX(LPeter1997): Noexcept specifier
-        // XXX(LPeter1997): Possibly don't need inserted
         template <typename Src>
         [[nodiscard]] constexpr decltype(auto)
         reparse(Src const& src,
