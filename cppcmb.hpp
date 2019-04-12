@@ -1870,6 +1870,40 @@ static_assert(                                        \
         /* constexpr */ void clear() {
             m_Cache.clear();
         }
+
+        // XXX(LPeter1997): Noexcept specifier
+        // XXX(LPeter1997): We possibly don't need inserted
+        void invalidate(std::size_t start, std::size_t rem, std::size_t /* ins */) {
+            // start: Position of the source we are manipulating
+            // rem: Removed length
+            // ins: Inserted length
+
+            auto end = start + rem;
+
+            // XXX(LPeter1997): Going through every entry is not very effective
+            // we would need some helper structure to search by interval
+
+            for (auto it = m_Cache.begin(); it != m_Cache.end();) {
+                auto r_from = it->first.second;
+                // XXX(LPeter1997): Solve this
+                // Maybe redundantly store it
+                auto r_furthest = /* somehow access furthest ??? */;
+                auto r_to = r_from + r_furthest;
+
+                // [f_from; r_to) is the entry's interval
+                // Need to check overlap with [start; end)
+                // If they overlap, remove entry
+
+                // XXX(LPeter1997): Allow equality?
+                if (start >= r_to || r_from >= end) {
+                    // No overlap
+                    ++it;
+                }
+                else {
+                    it = m_Cache.erase(it);
+                }
+            }
+        }
     };
 
     namespace detail {
@@ -2673,6 +2707,17 @@ static_assert(                                        \
         template <typename Src>
         [[nodiscard]] constexpr decltype(auto) parse(Src const& src) {
             m_Context.clear();
+            auto r = reader(src, m_Context);
+            return m_Parser.apply(r);
+        }
+
+        // XXX(LPeter1997): Noexcept specifier
+        // XXX(LPeter1997): Possibly don't need inserted
+        template <typename Src>
+        [[nodiscard]] constexpr decltype(auto)
+        reparse(Src const& src,
+            std::size_t start, std::size_t rem, std::size_t ins) {
+            m_Context.memo().invalidate(start, rem, ins);
             auto r = reader(src, m_Context);
             return m_Parser.apply(r);
         }
