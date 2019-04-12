@@ -171,7 +171,8 @@ namespace cppcmb {
         inline constexpr auto is_detected_exact_v =
             is_detected_exact<Expected, Op, Args...>::value;
 
-        template <typename To, template <typename...> typename Op, typename... Args>
+        template <typename To, template <typename...> typename Op,
+            typename... Args>
         using is_detected_convertible =
             std::is_convertible<detected_t<Op, Args...>, To>;
 
@@ -1118,7 +1119,7 @@ static_assert(                                        \
                 return result_t(failure(), 0U);
             }
             else {
-                return result_t(success(r.current(), 1U), 0U);
+                return result_t(success(r.current(), 1U), 1U);
             }
         }
     };
@@ -1898,7 +1899,7 @@ static_assert(                                        \
                 // If they overlap, remove entry
 
                 // XXX(LPeter1997): Allow equality?
-                if (start >= r_to || r_from >= end) {
+                if (start > r_to || r_from > end) {
                     // No overlap
                     ++it;
                 }
