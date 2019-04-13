@@ -22,4 +22,4 @@ You can open issues, or do a pull-request if you've implemented/fixed something.
 
 # Roadmap:
 * Error reporting and a way to describe parsers to the user
-* Incremental parsing
+* Testing and fuzzing the library
