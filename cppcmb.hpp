@@ -1,9 +1,12 @@
 /**
  * cppcmb.hpp
  *
- * @author Peter Lenkefi
- * @date 2018-09-05
- * @description Generic parser combinators for C++17.
+ * Copyright (c) 2018-2019 Peter Lenkefi
+ *
+ * Distributed under the MIT License.
+ *
+ * A simple to use C++17 parser combinator library.
+ * Repository and usage: https://github.com/LPeter1997/CppCmb
  */
 
 #ifndef CPPCMB_HPP
