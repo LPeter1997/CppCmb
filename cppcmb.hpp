@@ -103,9 +103,6 @@ static constexpr bool is_self_v =                                 \
 // belong there because we wrapped it in memo_context.
 // Also the helpers for indirect-recursion...
 
-// XXX(LPeter1997): Simplify CTAD deduction guidelines
-// Deduction guide is separate from cror, so we don't need remove_cvref_t-s
-
 // XXX(LPeter1997): We could make many and many1 right recursive!
 // It would simplify implementation and allow incremental parsing to benefit
 // from individual list elements
@@ -336,9 +333,8 @@ namespace cppcmb {
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename TFwd>
-    success(TFwd&&, std::size_t) -> success<detail::remove_cvref_t<TFwd>>;
+    success(TFwd, std::size_t) -> success<TFwd>;
 
     /**
      * Failure "type-constructor". The type that the parser returns when it
@@ -465,7 +461,7 @@ namespace cppcmb {
     };
 
     template <typename... Ts>
-    product(Ts&&...) -> product<detail::remove_cvref_t<Ts>...>;
+    product(Ts...) -> product<Ts...>;
 
     /**
      * Make products comparable.
@@ -927,7 +923,7 @@ static_assert(                                        \
     };
 
      template <typename TFwd>
-    some(TFwd&&) -> some<detail::remove_cvref_t<TFwd>>;
+    some(TFwd) -> some<TFwd>;
 
     /**
      * None type-constructor for maybe.
@@ -1097,12 +1093,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd, typename FnFwd>
-    action_t(PFwd&&, FnFwd&&) -> action_t<
-        detail::remove_cvref_t<PFwd>,
-        std::decay_t<FnFwd>
-    >;
+    action_t(PFwd, FnFwd) -> action_t<PFwd, FnFwd>;
 
     /**
      * A parser that simply consumes a single element. Succeeds if there is an
@@ -1229,12 +1221,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename P1Fwd, typename P2Fwd>
-    seq_t(P1Fwd&&, P2Fwd&&) -> seq_t<
-        detail::remove_cvref_t<P1Fwd>,
-        detail::remove_cvref_t<P2Fwd>
-    >;
+    seq_t(P1Fwd, P2Fwd) -> seq_t<P1Fwd, P2Fwd>;
 
     /**
      * Operator for making a sequence.
@@ -1338,12 +1326,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename P1Fwd, typename P2Fwd>
-    alt_t(P1Fwd&&, P2Fwd&&) -> alt_t<
-        detail::remove_cvref_t<P1Fwd>,
-        detail::remove_cvref_t<P2Fwd>
-    >;
+    alt_t(P1Fwd, P2Fwd) -> alt_t<P1Fwd, P2Fwd>;
 
     /**
      * Operator for making alternatives.
@@ -1457,12 +1441,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename P1Fwd, typename P2Fwd>
-    eager_alt_t(P1Fwd&&, P2Fwd&&) -> eager_alt_t<
-        detail::remove_cvref_t<P1Fwd>,
-        detail::remove_cvref_t<P2Fwd>
-    >;
+    eager_alt_t(P1Fwd, P2Fwd) -> eager_alt_t<P1Fwd, P2Fwd>;
 
     /**
      * Operator for making eager alternatives.
@@ -1582,9 +1562,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    many_t(PFwd&&) -> many_t<detail::remove_cvref_t<PFwd>>;
+    many_t(PFwd) -> many_t<PFwd>;
 
     /**
      * Operator for making many parser.
@@ -1657,9 +1636,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    many1_t(PFwd&&) -> many1_t<detail::remove_cvref_t<PFwd>>;
+    many1_t(PFwd) -> many1_t<PFwd>;
 
     /**
      * Operator for making many1 parser.
@@ -1728,9 +1706,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    opt_t(PFwd&&) -> opt_t<detail::remove_cvref_t<PFwd>>;
+    opt_t(PFwd) -> opt_t<PFwd>;
 
     /**
      * Operator for making optional parser.
@@ -2025,9 +2002,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    packrat_t(PFwd&&) -> packrat_t<detail::remove_cvref_t<PFwd>>;
+    packrat_t(PFwd) -> packrat_t<PFwd>;
 
     /**
      * Wrapper to make any combinator a packrat parser.
@@ -2194,9 +2170,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    drec_packrat_t(PFwd&&) -> drec_packrat_t<detail::remove_cvref_t<PFwd>>;
+    drec_packrat_t(PFwd) -> drec_packrat_t<PFwd>;
 
     /**
      * Wrapper to make any combinator a direct-left-recursive packrat parser.
@@ -2486,9 +2461,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    irec_packrat_t(PFwd&&) -> irec_packrat_t<detail::remove_cvref_t<PFwd>>;
+    irec_packrat_t(PFwd) -> irec_packrat_t<PFwd>;
 
     /**
      * Wrapper to make any combinator a direct-left-recursive packrat parser.
@@ -2713,9 +2687,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PredFwd>
-    filter(PredFwd&&) -> filter<std::decay_t<PredFwd>>;
+    filter(PredFwd) -> filter<PredFwd>;
 
     /**
      * Selects some elements from a product.
@@ -2773,9 +2746,8 @@ static_assert(                                        \
         }
     };
 
-    // XXX(LPeter1997): Simplify
     template <typename PFwd>
-    parser(PFwd&&) -> parser<detail::remove_cvref_t<PFwd>>;
+    parser(PFwd) -> parser<PFwd>;
 
 } /* namespace cppcmb */
 
