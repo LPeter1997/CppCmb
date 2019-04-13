@@ -1198,11 +1198,16 @@ static_assert(                                        \
             );
             // Invoke the second parser
             auto p2_inv = m_Second.apply(r2);
+            // Max peek distance
+            auto max_furthest = std::max(
+                p1_inv.furthest(),
+                p1_succ.matched() + p2_inv.furthest()
+            );
             if (p2_inv.is_failure()) {
                 // Second failed, fail on that error
                 return result_t(
                     std::move(p2_inv).failure(),
-                    p1_succ.matched() + p2_inv.furthest()
+                    max_furthest
                 );
             }
             // Get the success alternative
@@ -1216,8 +1221,7 @@ static_assert(                                        \
                     ),
                     p1_succ.matched() + p2_succ.matched()
                 ),
-                // XXX(LPeter1997): Maybe not this?
-                p1_succ.matched() + p2_inv.furthest()
+                max_furthest
             );
         }
     };
