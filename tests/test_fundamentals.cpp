@@ -19,7 +19,8 @@ TEST_CASE("'one' returns a character if there is one", "[one]") {
 
 		REQUIRE(res.is_success());
 		auto succ = res.success();
-		REQUIRE(succ.remaining() == 1);
+		REQUIRE(res.furthest() == 1);
+		REQUIRE(succ.matched() == 1);
 		REQUIRE(succ.value() == 'a');
 	}
 
@@ -28,8 +29,7 @@ TEST_CASE("'one' returns a character if there is one", "[one]") {
 		auto res = p.apply(pc::reader(src));
 
 		REQUIRE(res.is_failure());
-		auto f = res.failure();
-		REQUIRE(f.furthest() == 0);
+		REQUIRE(res.furthest() == 0);
 	}
 }
 
@@ -41,8 +41,7 @@ TEST_CASE("'end' succeeds is there is nothing to consume", "[end]") {
 		auto res = p.apply(pc::reader(src));
 
 		REQUIRE(res.is_failure());
-		auto f = res.failure();
-		REQUIRE(f.furthest() == 0);
+		REQUIRE(res.furthest() == 0);
 	}
 
 	SECTION("there is no character to consume") {
@@ -51,7 +50,8 @@ TEST_CASE("'end' succeeds is there is nothing to consume", "[end]") {
 
 		REQUIRE(res.is_success());
 		auto succ = res.success();
-		REQUIRE(succ.remaining() == 0);
+		REQUIRE(res.furthest() == 0);
+		REQUIRE(succ.matched() == 0);
 		REQUIRE(same_type_v<decltype(succ.value()), pc::product<>>);
 	}
 }
@@ -70,8 +70,7 @@ TEST_CASE("'match' is user-defined, here we test filtering", "[match]") {
 		auto res = p.apply(pc::reader(src));
 
 		REQUIRE(res.is_failure());
-		auto f = res.failure();
-		REQUIRE(f.furthest() == 0);
+		REQUIRE(res.furthest() == 0);
 	}
 
 	SECTION("there is a character to consume and it matches") {
@@ -80,8 +79,9 @@ TEST_CASE("'match' is user-defined, here we test filtering", "[match]") {
 
 		REQUIRE(res.is_success());
 		auto succ = res.success();
+		REQUIRE(res.furthest() == 1);
 		REQUIRE(succ.value() == 'a');
-		REQUIRE(succ.remaining() == 1);
+		REQUIRE(succ.matched() == 1);
 	}
 
 	SECTION("there is a character to consume but it doesn't match") {
@@ -89,8 +89,7 @@ TEST_CASE("'match' is user-defined, here we test filtering", "[match]") {
 		auto res = p.apply(pc::reader(src));
 
 		REQUIRE(res.is_failure());
-		auto f = res.failure();
-		REQUIRE(f.furthest() == 0);
+		REQUIRE(res.furthest() == 1);
 	}
 }
 
@@ -103,8 +102,7 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 			auto res = p.apply(pc::reader(src));
 
 			REQUIRE(res.is_failure());
-			auto f = res.failure();
-			REQUIRE(f.furthest() == 0);
+			REQUIRE(res.furthest() == 1);
 		}
 
 		SECTION("the second part fails") {
@@ -112,8 +110,7 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 			auto res = p.apply(pc::reader(src));
 
 			REQUIRE(res.is_failure());
-			auto f = res.failure();
-			REQUIRE(f.furthest() == 1);
+			REQUIRE(res.furthest() == 1);
 		}
 
 		SECTION("matches the input") {
@@ -122,8 +119,9 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 
 			REQUIRE(res.is_success());
 			auto succ = res.success();
+			REQUIRE(res.furthest() == 1);
 			REQUIRE(succ.value() == 'a');
-			REQUIRE(succ.remaining() == 1);
+			REQUIRE(succ.matched() == 1);
 		}
 	}
 
@@ -135,8 +133,7 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 			auto res = p.apply(pc::reader(src));
 
 			REQUIRE(res.is_failure());
-			auto f = res.failure();
-			REQUIRE(f.furthest() == 0);
+			REQUIRE(res.furthest() == 1);
 		}
 
 		SECTION("the center part fails") {
@@ -144,8 +141,7 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 			auto res = p.apply(pc::reader(src));
 
 			REQUIRE(res.is_failure());
-			auto f = res.failure();
-			REQUIRE(f.furthest() == 1);
+			REQUIRE(res.furthest() == 2);
 		}
 
 		SECTION("the last part fails") {
@@ -153,8 +149,7 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 			auto res = p.apply(pc::reader(src));
 
 			REQUIRE(res.is_failure());
-			auto f = res.failure();
-			REQUIRE(f.furthest() == 2);
+			REQUIRE(res.furthest() == 3);
 		}
 
 		SECTION("matches the input") {
@@ -163,10 +158,11 @@ TEST_CASE("'seq' succeeds if all elements succeed", "[seq]") {
 
 			REQUIRE(res.is_success());
 			auto succ = res.success();
+			REQUIRE(res.furthest() == 3);
 			REQUIRE(same_type_v<decltype(succ.value()), pc::product<char, char, char>>);
 			// XXX(LPeter1997): GCC bug?
 			REQUIRE(succ.value() == pc::product<char, char, char>('a', 'b', 'c'));
-			REQUIRE(succ.remaining() == 3);
+			REQUIRE(succ.matched() == 3);
 		}
 	}
 }
