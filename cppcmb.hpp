@@ -1952,7 +1952,7 @@ public:
     [[nodiscard]] constexpr decltype(auto) apply(reader<Src> const& r) const {
         cppcmb_assert_parser(P, Src);
 
-        using apply_t = parser_result_t<P, Src>;
+        using result_t = parser_result_t<P, Src>;
 
         auto* entry = this->get_memo(r);
         if (entry == nullptr) {
@@ -1960,7 +1960,7 @@ public:
             return this->put_memo(r, std::move(res), res.furthest());
         }
         else {
-            return std::any_cast<apply_t&>(*entry);
+            return std::any_cast<result_t&>(*entry);
         }
     }
 };
