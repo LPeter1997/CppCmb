@@ -55,25 +55,22 @@ assert(((void)msg, (__VA_ARGS__)))
 #define cppcmb_unreachable() \
 cppcmb_assert("Unreachable code!", false)
 
-#define cppcmb_noexcept(...) \
-noexcept(noexcept(__VA_ARGS__))
-
-#define cppcmb_getter(name, ...)                                     \
-[[nodiscard]]                                                        \
-constexpr auto& name() & cppcmb_noexcept(__VA_ARGS__) {              \
-    return __VA_ARGS__;                                              \
-}                                                                    \
-[[nodiscard]]                                                        \
-constexpr auto const& name() const& cppcmb_noexcept(__VA_ARGS__) {   \
-    return __VA_ARGS__;                                              \
-}                                                                    \
-[[nodiscard]]                                                        \
-constexpr auto&& name() && cppcmb_noexcept(__VA_ARGS__) {            \
-    return std::move(__VA_ARGS__);                                   \
-}                                                                    \
-[[nodiscard]]                                                        \
-constexpr auto const&& name() const&& cppcmb_noexcept(__VA_ARGS__) { \
-    return std::move(__VA_ARGS__);                                   \
+#define cppcmb_getter(name, ...)                                        \
+[[nodiscard]]                                                           \
+constexpr auto& name() & noexcept(noexcept(__VA_ARGS__)) {              \
+    return __VA_ARGS__;                                                 \
+}                                                                       \
+[[nodiscard]]                                                           \
+constexpr auto const& name() const& noexcept(noexcept(__VA_ARGS__)) {   \
+    return __VA_ARGS__;                                                 \
+}                                                                       \
+[[nodiscard]]                                                           \
+constexpr auto&& name() && noexcept(noexcept(__VA_ARGS__)) {            \
+    return std::move(__VA_ARGS__);                                      \
+}                                                                       \
+[[nodiscard]]                                                           \
+constexpr auto const&& name() const&& noexcept(noexcept(__VA_ARGS__)) { \
+    return std::move(__VA_ARGS__);                                      \
 }
 
 #define cppcmb_self_check(type) \
@@ -109,6 +106,9 @@ static constexpr bool is_self_v =                                 \
 
 // XXX(LPeter1997): We can simplify at a lot of places just by returning result
 // Instead if dissecting it to success/failure and reconstructing
+
+// XXX(LPeter1997): Undo indentation for namespaces
+// They free up a lot of column space
 
 namespace cppcmb {
 
@@ -2764,7 +2764,6 @@ static_assert(                                        \
  */
 #undef cppcmb_self_check
 #undef cppcmb_getter
-#undef cppcmb_noexcept
 #undef cppcmb_unreachable
 #undef cppcmb_assert
 #undef cppcmb_return
