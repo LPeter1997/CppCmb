@@ -551,7 +551,7 @@ product_values_impl(product<Ts...>&& res, Head&& h, Tail&&... t) {
  */
 template <typename... Ts>
 [[nodiscard]] constexpr auto product_values(Ts&&... vs) {
-    // XXX(LPeter1997): Bug in GCC?
+    // XXX(LPeter1997): GCC bug
     return detail::product_values_impl(product<>(), cppcmb_fwd(vs)...);
 }
 
