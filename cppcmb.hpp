@@ -437,6 +437,10 @@ public:
 template <typename... Ts>
 product(Ts...) -> product<Ts...>;
 
+// To fix a GCC bug
+template <typename T, typename... Ts>
+product(T, Ts...) -> product<T, Ts...>;
+
 /**
  * Make products comparable.
  */
@@ -495,10 +499,7 @@ template <std::size_t... Is, typename... Ts, typename Head, typename... Tail>
     product<Ts...>&& res, Head&& h, Tail&&... t) {
 
     return product_values_impl(
-        // XXX(LPeter1997): GCC bug?
-        product<Ts..., remove_cvref_t<Head>>(
-            std::move(res).template get<Is>()..., cppcmb_fwd(h)
-        ),
+        product(std::move(res).template get<Is>()..., cppcmb_fwd(h)),
         cppcmb_fwd(t)...
     );
 }
@@ -1079,7 +1080,7 @@ public:
     [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
         -> result<product<>> {
 
-        // XXX(LPeter1997): GCC bug?
+        // XXX(LPeter1997): GCC bug
         return result<product<>>(success(product<>(), 0U), 0U);
     }
 };
@@ -1125,7 +1126,7 @@ public:
         -> result<product<>> {
 
         if (r.is_end()) {
-            // XXX(LPeter1997): GCC bug?
+            // XXX(LPeter1997): GCC bug
             return result<product<>>(success(product<>(), 0U), 0U);
         }
         else {
