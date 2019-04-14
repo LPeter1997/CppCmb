@@ -298,13 +298,11 @@ public:
     using value_type = T;
 
 private:
-    cppcmb_self_check(success);
-
     value_type  m_Value;
     std::size_t m_Matched;
 
 public:
-    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+    template <typename TFwd>
     constexpr success(TFwd&& val, std::size_t matched)
         // XXX(LPeter1997): Bug in GCC?
         // noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
@@ -348,16 +346,13 @@ public:
     using failure_type = ::cppcmb::failure;
 
 private:
-    cppcmb_self_check(result);
-
     using either_type = std::variant<success_type, failure_type>;
 
     either_type m_Data;
     std::size_t m_Furthest;
 
 public:
-    // XXX(LPeter1997): We don't need self-check!
-    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+    template <typename TFwd>
     constexpr result(TFwd&& val, std::size_t furthest)
         noexcept(std::is_nothrow_constructible_v<either_type, TFwd&&>)
         : m_Data(cppcmb_fwd(val)), m_Furthest(furthest) {
