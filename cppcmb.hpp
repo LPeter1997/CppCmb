@@ -304,8 +304,7 @@ private:
 public:
     template <typename TFwd>
     constexpr success(TFwd&& val, std::size_t matched)
-        // XXX(LPeter1997): Bug in GCC?
-        // noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
+        noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
         : m_Value(cppcmb_fwd(val)), m_Matched(matched) {
     }
 
