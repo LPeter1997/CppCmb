@@ -1070,6 +1070,24 @@ template <typename PFwd, typename FnFwd>
 action_t(PFwd, FnFwd) -> action_t<PFwd, FnFwd>;
 
 /**
+ * A parser that always succeeds.
+ */
+class epsilon_t : public combinator<epsilon_t> {
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<product<>> {
+
+        // XXX(LPeter1997): GCC bug?
+        return result<product<>>(success(product<>(), 0U), 0U);
+    }
+};
+
+// Value for 'epsilon' parser
+inline constexpr auto epsilon = epsilon_t();
+
+/**
  * A parser that simply consumes a single element. Succeeds if there is an
  * element to consume.
  */
@@ -2057,8 +2075,7 @@ public:
 
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
-    [[nodiscard]]
-    constexpr decltype(auto) apply(reader<Src> const& r) const {
+    [[nodiscard]] constexpr decltype(auto) apply(reader<Src> const& r) const {
         cppcmb_assert_parser(P, Src);
 
         using result_t = parser_result_t<P, Src>;
