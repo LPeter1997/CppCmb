@@ -76,6 +76,12 @@ constexpr auto const&& name() const&& noexcept(noexcept(__VA_ARGS__)) { \
 #define cppcmb_self_check(type) \
 cppcmb_prelude_self_check(type, cppcmb_unique_id(cppcmb_self_type))
 
+#define cppcmb_is_specialization(type)                                 \
+template <typename SpecType>                                           \
+using is_##type = ::cppcmb::detail::is_specialization<SpecType, type>; \
+template <typename SpecType>                                           \
+inline constexpr bool is_##type##_v = is_##type<SpecType>::value
+
 /**
  * Macro details.
  */
@@ -174,6 +180,27 @@ inline constexpr auto is_detected_convertible_v =
     is_detected_convertible<To, Op, Args...>::value;
 
 /**
+ * @see https://en.cppreference.com/w/cpp/types/remove_cvref
+ */
+template <typename T>
+struct remove_cvref : std::remove_cv<std::remove_reference_t<T>> {};
+
+template <typename T>
+using remove_cvref_t = typename remove_cvref<T>::type;
+
+/**
+ * Check if a type is a specialization of a template.
+ */
+template <typename, template <typename...> typename>
+struct is_specialization : std::false_type {};
+
+template <template <typename...> typename T, typename... Ts>
+struct is_specialization<T<Ts...>, T> : std::true_type {};
+
+template <typename T, template <typename...> typename Templ>
+inline constexpr bool is_specialization_v = is_specialization<T, Templ>::value;
+
+/**
  * Reader concept checking.
  */
 template <typename T>
@@ -188,15 +215,6 @@ inline constexpr bool is_reader_source_v = std::conjunction_v<
     is_detected<element_at_t, T>,
     is_detected<msize_t, T>
 >;
-
-/**
- * @see https://en.cppreference.com/w/cpp/types/remove_cvref
- */
-template <typename T>
-struct remove_cvref : std::remove_cv<std::remove_reference_t<T>> {};
-
-template <typename T>
-using remove_cvref_t = typename remove_cvref<T>::type;
 
 } /* namespace detail */
 
@@ -323,23 +341,11 @@ success(TFwd, std::size_t) -> success<TFwd>;
  */
 class failure { };
 
-namespace detail {
-
-struct result_base {};
-
-template <typename T>
-using is_result = std::is_base_of<result_base, T>;
-
-template <typename T>
-inline constexpr bool is_result_v = is_result<T>::value;
-
-} /* namespace detail */
-
 /**
  * The result type of a parser. It's either a success or a failure type.
  */
 template <typename T>
-class result : private detail::result_base {
+class result {
 public:
     using success_type = ::cppcmb::success<T>;
     using failure_type = ::cppcmb::failure;
@@ -373,23 +379,11 @@ public:
     }
 };
 
-namespace detail {
-
-class product_base {};
-
-template <typename T>
-using is_product = std::is_base_of<product_base, T>;
-
-template <typename T>
-inline constexpr bool is_product_v = is_product<T>::value;
-
-} /* namespace detail */
-
 /**
  * A tuple-like object that can stores a sequence of results.
  */
 template <typename... Ts>
-class product : private detail::product_base {
+class product {
 private:
     using tuple_type = decltype(std::make_tuple(std::declval<Ts>()...));
 
@@ -439,6 +433,12 @@ product(Ts...) -> product<Ts...>;
 // To fix a GCC bug
 template <typename T, typename... Ts>
 product(T, Ts...) -> product<T, Ts...>;
+
+namespace detail {
+
+cppcmb_is_specialization(product);
+
+} /* namespace detail */
 
 /**
  * Make products comparable.
@@ -555,20 +555,8 @@ template <typename... Ts>
     return detail::product_values_impl(product<>(), cppcmb_fwd(vs)...);
 }
 
-namespace detail {
-
-class sum_base {};
-
-template <typename T>
-using is_sum = std::is_base_of<sum_base, T>;
-
-template <typename T>
-inline constexpr bool is_sum_v = is_sum<T>::value;
-
-} /* namespace detail */
-
 template <typename... Ts>
-class sum : private detail::sum_base {
+class sum {
 private:
     using variant_type = std::variant<Ts...>;
 
@@ -602,6 +590,12 @@ public:
 
     cppcmb_getter(as_variant, m_Value)
 };
+
+namespace detail {
+
+cppcmb_is_specialization(sum);
+
+} /* namespace detail */
 
 /**
  * Make sums comparable.
@@ -744,7 +738,7 @@ namespace detail {
 /**
  * A tag-type for every combinator.
  */
-struct combinator_base {};
+class combinator_base {};
 
 /**
  * CRTP helper.
@@ -908,23 +902,11 @@ some(TFwd) -> some<TFwd>;
  */
 class none {};
 
-namespace detail {
-
-struct maybe_base {};
-
-template <typename T>
-using is_maybe = std::is_base_of<maybe_base, T>;
-
-template <typename T>
-inline constexpr bool is_maybe_v = is_maybe<T>::value;
-
-} /* namespace detail */
-
 /**
  * Generic maybe-type.
  */
 template <typename T>
-class maybe : detail::maybe_base {
+class maybe {
 private:
     cppcmb_self_check(maybe);
 
@@ -951,6 +933,12 @@ public:
     cppcmb_getter(some, std::get<some_type>(m_Data))
     cppcmb_getter(none, std::get<none_type>(m_Data))
 };
+
+namespace detail {
+
+cppcmb_is_specialization(maybe);
+
+} /* namespace detail */
 
 /**
  * Action combinator, applies a function to the result when the sub-parser
@@ -2730,6 +2718,7 @@ parser(PFwd) -> parser<PFwd>;
 /**
  * Library macro undefines.
  */
+#undef cppcmb_is_specialization
 #undef cppcmb_self_check
 #undef cppcmb_getter
 #undef cppcmb_unreachable
