@@ -12,6 +12,7 @@
 #ifndef CPPCMB_HPP
 #define CPPCMB_HPP
 
+#include <algorithm>
 #include <any>
 #include <cassert>
 #include <cstddef>
@@ -1064,7 +1065,7 @@ class epsilon_t : public combinator<epsilon_t> {
 public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+    [[nodiscard]] constexpr auto apply(reader<Src> const& /* r */) const
         -> result<product<>> {
 
         // XXX(LPeter1997): GCC bug
@@ -1243,7 +1244,6 @@ private:
     P2 m_Second;
 
 public:
-    // XXX(LPeter1997): Noexcept specifier
     template <typename P1Fwd, typename P2Fwd>
     constexpr alt_t(P1Fwd&& p1, P2Fwd&& p2)
         noexcept(
