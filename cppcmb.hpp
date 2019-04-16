@@ -1526,7 +1526,7 @@ public:
         auto rr = r;
         while (true) {
             auto p_inv = m_Parser.apply(rr);
-            furthest = std::max(furthest, p_inv.furthest());
+            furthest = std::max(furthest, matched + p_inv.furthest());
             if (p_inv.is_failure()) {
                 // Stop applying
                 break;
