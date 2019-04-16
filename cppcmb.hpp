@@ -1391,7 +1391,7 @@ public:
             auto p1_succ = std::move(p1_inv).success();
             return result_t(success(
                 sum_values<value_t<Src>>(std::move(p1_succ).value()),
-                p1_succ.remaining()
+                p1_succ.matched()
             ), furthest);
         }
         // RHS succeeded
@@ -1399,7 +1399,7 @@ public:
             auto p2_succ = std::move(p2_inv).success();
             return result_t(success(
                 sum_values<value_t<Src>>(std::move(p2_succ).value()),
-                p2_succ.remaining()
+                p2_succ.matched()
             ), furthest);
         }
 
