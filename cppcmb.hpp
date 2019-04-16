@@ -1785,7 +1785,7 @@ private:
     // pair<result, furthest>
     using value_type = std::pair<std::any, std::size_t>;
 
-    std::unordered_map<key_type, value_type, detail::pair_hasher> m_Cache;
+    std::unordered_map<key_type, value_type, pair_hasher> m_Cache;
 
 public:
     // XXX(LPeter1997): Noexcept specifier
@@ -1810,7 +1810,7 @@ public:
     constexpr auto& put(std::uintptr_t pid, std::size_t pos,
         TFwd&& val, std::size_t furth) {
 
-        using raw_type = detail::remove_cvref_t<TFwd>;
+        using raw_type = remove_cvref_t<TFwd>;
         auto id = std::pair(pid, pos);
         auto& a = (m_Cache[id] = std::pair(cppcmb_fwd(val), furth));
         return std::any_cast<raw_type&>(a.first);
@@ -2439,12 +2439,12 @@ namespace detail {
  */
 class call_head_table {
 private:
-    std::unordered_map<std::size_t, detail::irec_head*> m_Heads;
+    std::unordered_map<std::size_t, irec_head*> m_Heads;
 
 public:
     // XXX(LPeter1997): Noexcept specifier
     [[nodiscard]]
-    /* constexpr */ detail::irec_head* get(std::size_t n) const {
+    /* constexpr */ irec_head* get(std::size_t n) const {
         auto it = m_Heads.find(n);
         if (it == m_Heads.end()) {
             return nullptr;
@@ -2457,7 +2457,7 @@ public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
     [[nodiscard]]
-    /* constexpr */ detail::irec_head* get(reader<Src> const& r) const {
+    /* constexpr */ irec_head* get(reader<Src> const& r) const {
         return get(r.cursor());
     }
 
@@ -2502,7 +2502,7 @@ public:
 
 class call_stack {
 private:
-    std::deque<std::shared_ptr<detail::irec_left_recursive>> m_Stack;
+    std::deque<std::shared_ptr<irec_left_recursive>> m_Stack;
 
 public:
     // XXX(LPeter1997): Noexcept specifier
