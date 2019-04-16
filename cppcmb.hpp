@@ -1775,8 +1775,6 @@ struct pair_hasher {
     }
 };
 
-} /* namespace detail */
-
 /**
  * Memorization table for packrat parsers.
  */
@@ -1893,8 +1891,6 @@ public:
         // END OF UNGODLY INEFFICIENT CODE
     }
 };
-
-namespace detail {
 
 template <typename Self>
 class packrat_base : public combinator<Self> {
@@ -2436,6 +2432,8 @@ template <typename PFwd>
 [[nodiscard]] constexpr auto memo_i(PFwd&& p)
     cppcmb_return(irec_packrat_t(cppcmb_fwd(p)))
 
+namespace detail {
+
 /**
  * A type to track call-heads.
  */
@@ -2533,15 +2531,17 @@ public:
     }
 };
 
+} /* namespace detail */
+
 /**
  * A tuple of helper-types that the memorizing parsers can use for
  * memorization and direct/indirect recursion.
  */
 class memo_context {
 private:
-    memo_table      m_MemoTable;
-    call_head_table m_RecursionHeads;
-    call_stack      m_LrStack;
+    detail::memo_table      m_MemoTable;
+    detail::call_head_table m_RecursionHeads;
+    detail::call_stack      m_LrStack;
 
 public:
     cppcmb_getter(memo, m_MemoTable)
