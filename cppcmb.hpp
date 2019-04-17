@@ -2044,10 +2044,16 @@ private:
                 return grow(r, new_old);
             }
             else {
-                return old_res;
+                // We need to overwrite max-furthest in the memo-table!
+                // That's why we don't simply return old_res
+                return this->put_memo(
+                    r, in_rec(old_res), max_furthest
+                ).value();
             }
         }
         else {
+            // We need to overwrite max-furthest in the memo-table!
+            // That's why we don't simply return old_res
             // XXX(LPeter1997): The actual result doesn't hold the
             // max_furthest value!
             return this->put_memo(
@@ -2362,6 +2368,10 @@ private:
                 return grow(r, new_old, h);
             }
             else {
+                // XXX(LPeter1997): Do what drec_packrat does here
+                // We need to overwrite max-furthest in the memo-table!
+                // That's why we don't simply return old_res (TODO)
+
                 auto it = rec_heads.find(r);
                 cppcmb_assert("", it != rec_heads.end());
                 rec_heads.erase(it);
@@ -2373,6 +2383,10 @@ private:
             }
         }
         else {
+            // XXX(LPeter1997): Do what drec_packrat does here
+            // We need to overwrite max-furthest in the memo-table!
+            // That's why we don't simply return old_res (TODO)
+
             auto it = rec_heads.find(r);
             cppcmb_assert("", it != rec_heads.end());
             rec_heads.erase(it);
