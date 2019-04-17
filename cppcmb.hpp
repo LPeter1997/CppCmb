@@ -2030,12 +2030,16 @@ private:
         auto& old_succ = old_res.success();
 
         auto tmp_res = m_Parser.apply(r);
+        auto max_furthest = std::max(old_res.furthest(), tmp_res.furthest());
         if (tmp_res.is_success()) {
             auto& tmp_succ = tmp_res.success();
             if (old_succ.matched() < tmp_succ.matched()) {
+                // XXX(LPeter1997): The actual result doesn't hold the
+                // max_furthest value!
+
                 // We successfully grew the seed
                 auto& new_old = this->put_memo(
-                    r, in_rec(tmp_res), tmp_res.furthest()
+                    r, in_rec(tmp_res), max_furthest
                 ).value();
                 return grow(r, new_old);
             }
@@ -2044,8 +2048,10 @@ private:
             }
         }
         else {
+            // XXX(LPeter1997): The actual result doesn't hold the
+            // max_furthest value!
             return this->put_memo(
-                r, in_rec(old_res), old_res.furthest()
+                r, in_rec(old_res), max_furthest
             ).value();
         }
     }
@@ -2344,11 +2350,14 @@ private:
         }
 
         auto tmp_res = m_Parser.apply(r);
+        auto max_furthest = std::max(old_res.furthest(), tmp_res.furthest());
         if (tmp_res.is_success()) {
             auto& tmp_succ = tmp_res.success();
             if (old_cur < tmp_succ.matched()) {
+                // XXX(LPeter1997): The actual result doesn't hold the
+                // max_furthest value!
                 auto& new_old = this->put_memo(
-                    r, tmp_res, tmp_res.furthest()
+                    r, tmp_res, max_furthest
                 );
                 return grow(r, new_old, h);
             }
