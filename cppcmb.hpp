@@ -114,6 +114,10 @@ static constexpr bool is_self_v =                                 \
 // XXX(LPeter1997): We can simplify at a lot of places just by returning result
 // Instead if dissecting it to success/failure and reconstructing
 
+// XXX(LPeter1997): It looks like direct-left-recursive incremental parsing is
+// a bit too strict (invalidates too many things)
+// Maybe just the nature of the recursion?
+
 namespace cppcmb {
 
 namespace detail {
@@ -2343,7 +2347,7 @@ private:
         parser_result_t<P, Src>& old_res,
         head& h) const -> parser_result_t<P, Src> {
 
-        using return_t = parser_result_t<P, Src>;
+        // using return_t = parser_result_t<P, Src>;
 
         auto& rec_heads = r.context().call_heads();
 
@@ -2368,30 +2372,29 @@ private:
                 return grow(r, new_old, h);
             }
             else {
-                // XXX(LPeter1997): Do what drec_packrat does here
                 // We need to overwrite max-furthest in the memo-table!
-                // That's why we don't simply return old_res (TODO)
+                // That's why we don't simply return old_res
 
                 auto it = rec_heads.find(r);
                 cppcmb_assert("", it != rec_heads.end());
                 rec_heads.erase(it);
 
-                auto* val = this->get_memo(r);
-                cppcmb_assert("", val != nullptr);
+                // auto* val = this->get_memo(r);
+                // cppcmb_assert("", val != nullptr);
 
-                return this-> template to_result<return_t>(*val);
+                // return this-> template to_result<return_t>(*val);
+                return this->put_memo(r, std::move(old_res), max_furthest);
             }
         }
         else {
-            // XXX(LPeter1997): Do what drec_packrat does here
             // We need to overwrite max-furthest in the memo-table!
-            // That's why we don't simply return old_res (TODO)
+            // That's why we don't simply return old_res
 
             auto it = rec_heads.find(r);
             cppcmb_assert("", it != rec_heads.end());
             rec_heads.erase(it);
 
-            return old_res;
+            return this->put_memo(r, std::move(old_res), max_furthest);
         }
     }
 
