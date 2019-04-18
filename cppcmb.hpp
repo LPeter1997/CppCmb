@@ -400,7 +400,8 @@ public:
     static constexpr auto index_sequence =
         std::make_index_sequence<sizeof...(Ts)>();
 
-    template <typename T, cppcmb_requires_t(!is_self_v<T>)>
+    template <typename T,
+        cppcmb_requires_t(sizeof...(Ts) == 1 && !is_self_v<T>)>
     constexpr product(T&& val)
         noexcept(std::is_nothrow_constructible_v<tuple_type, T&&>)
         : m_Value(cppcmb_fwd(val)) {
