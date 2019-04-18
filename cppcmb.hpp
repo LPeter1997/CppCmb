@@ -358,6 +358,14 @@ public:
 private:
     using either_type = std::variant<success_type, failure_type>;
 
+    /**
+     * The packrat parsers will have to fiddle with the furthest values.
+     */
+    template <typename>
+    friend class drec_packrat_t;
+    template <typename>
+    friend class irec_packrat_t;
+
     either_type m_Data;
     std::size_t m_Furthest;
 
@@ -2027,6 +2035,12 @@ private:
         parser_result_t<P, Src>& old_res
     ) const {
 
+        // XXX(LPeter1997): Right now the max_furthest is explicitly written
+        // back into the cache (redundantly). We could always ask the result
+        // directly.
+        // That way we don't have to put_memo the old values just to update
+        // 'furthest'
+
         using in_rec = in_recursion<parser_result_t<P, Src>>;
 
         if (old_res.is_failure()) {
@@ -2036,12 +2050,14 @@ private:
 
         auto tmp_res = m_Parser.apply(r);
         auto max_furthest = std::max(old_res.furthest(), tmp_res.furthest());
+
+        // Update the furthest value in both entries
+        old_res.m_Furthest = max_furthest;
+        tmp_res.m_Furthest = max_furthest;
+
         if (tmp_res.is_success()) {
             auto& tmp_succ = tmp_res.success();
             if (old_succ.matched() < tmp_succ.matched()) {
-                // XXX(LPeter1997): The actual result doesn't hold the
-                // max_furthest value!
-
                 // We successfully grew the seed
                 auto& new_old = this->put_memo(
                     r, in_rec(tmp_res), max_furthest
@@ -2059,8 +2075,6 @@ private:
         else {
             // We need to overwrite max-furthest in the memo-table!
             // That's why we don't simply return old_res
-            // XXX(LPeter1997): The actual result doesn't hold the
-            // max_furthest value!
             return this->put_memo(
                 r, in_rec(old_res), max_furthest
             ).value();
@@ -2348,7 +2362,12 @@ private:
         parser_result_t<P, Src>& old_res,
         head& h) const -> parser_result_t<P, Src> {
 
-        // using return_t = parser_result_t<P, Src>;
+        // XXX(LPeter1997): Right now the max_furthest is explicitly written
+        // back into the cache (redundantly). We could always ask the result
+        // directly.
+        // That way we don't have to put_memo the old values just to update
+        // 'furthest'
+        // Same comment and TODO as in drec_packrat_t::grow
 
         auto& rec_heads = r.context().call_heads();
 
@@ -2362,11 +2381,14 @@ private:
 
         auto tmp_res = m_Parser.apply(r);
         auto max_furthest = std::max(old_res.furthest(), tmp_res.furthest());
+
+        // Update the furthest value in both entries
+        old_res.m_Furthest = max_furthest;
+        tmp_res.m_Furthest = max_furthest;
+
         if (tmp_res.is_success()) {
             auto& tmp_succ = tmp_res.success();
             if (old_cur < tmp_succ.matched()) {
-                // XXX(LPeter1997): The actual result doesn't hold the
-                // max_furthest value!
                 auto& new_old = this->put_memo(
                     r, tmp_res, max_furthest
                 );
