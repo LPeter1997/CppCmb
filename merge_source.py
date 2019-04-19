@@ -98,7 +98,7 @@ def main():
             file.write(f'{prefix}\n{incl}\n\n{content}\n\n{postfix}')
         print(f'Files merged successfully into "{TARGET_PATH}"!')
     except Exception as err:
-        print(f'An error occured during merge:\n{er}')
+        print(f'An error occured during merge:\n{err}')
 
 if __name__ == "__main__":
     main()
