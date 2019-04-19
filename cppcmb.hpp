@@ -1747,6 +1747,8 @@ struct second {
 auto const name =              \
 ::cppcmb::rule_t<__VA_ARGS__, struct cppcmb_unique_id(cppcmb_rule_tag)>()
 
+// XXX(LPeter1997): The use of the inline variable like this is IFNDR...
+// We need an alternative solution!
 // XXX(LPeter1997): Noexcept specifier
 /**
  * A library macro that actually gets published.
