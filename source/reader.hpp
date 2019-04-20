@@ -12,8 +12,7 @@
 
 #include <cstddef>
 #include <memory>
-#include "is_detected.hpp"
-#include "remove_cvref.hpp"
+#include "detail.hpp"
 
 namespace cppcmb {
 

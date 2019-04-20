@@ -4,9 +4,14 @@ import re
 
 from enum import Enum
 
-FILE_PREFIX = """
+INCLUDE_GUARD_PREFIX = 'CPPCMB'
+SOURCE_PATH = 'source'
+TARGET_PATH = 'cppcmb2.hpp'
+TOP_INCLUDE = 'cppcmb.hpp'
+
+FILE_PREFIX = f"""
 /**
- * cppcmb.hpp
+ * {TARGET_PATH}
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -15,11 +20,6 @@ FILE_PREFIX = """
  * Repository and usage: https://github.com/LPeter1997/CppCmb
  */
 """
-
-INCLUDE_GUARD_PREFIX = 'CPPCMB'
-SOURCE_PATH = 'source'
-TARGET_PATH = 'cppcmb2.hpp'
-TOP_INCLUDE = 'cppcmb.hpp'
 
 STL_INCLUDE = r'^\s*#include\s*<.+>\s*\n'
 LOCAL_INCLUDE = r'^\s*#include\s*\"(.+)\"'
@@ -67,7 +67,10 @@ def process_file(root, fname):
                 elif re.match(LOCAL_INCLUDE, line):
                     # A library-include, we include it in the text
                     to_include = re.search(LOCAL_INCLUDE, line).group(1)
-                    result += process_file(root, to_include)
+                    to_include_path = os.path.dirname(to_include)
+                    to_include_fname = os.path.basename(to_include)
+                    next_root = os.path.join(root, to_include_path)
+                    result += process_file(next_root, to_include_fname)
                 elif re.match(g_endif, line):
                     # Include guard ended, end of file
                     state = ParseState.G_ENDIF

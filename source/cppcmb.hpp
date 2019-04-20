@@ -10,7 +10,13 @@
 #ifndef CPPCMB_CPPCMB_HPP
 #define CPPCMB_CPPCMB_HPP
 
+#include "apply_value.hpp"
+#include "combinator.hpp"
 #include "detail.hpp"
+#include "maybe.hpp"
+#include "product.hpp"
 #include "reader.hpp"
+#include "result.hpp"
+#include "sum.hpp"
 
 #endif /* CPPCMB_CPPCMB_HPP */

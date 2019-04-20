@@ -10,6 +10,7 @@
 #ifndef CPPCMB_DETAIL_HPP
 #define CPPCMB_DETAIL_HPP
 
+#include "detail/crtp.hpp"
 #include "detail/is_detected.hpp"
 #include "detail/is_specialization.hpp"
 #include "detail/macros.hpp"
