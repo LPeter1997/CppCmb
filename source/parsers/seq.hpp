@@ -5,7 +5,7 @@
  * Distributed under the MIT License.
  *
  * A combinator that sequences two parsers one after the other. Only applies the
- * second one if the first succeeded.
+ * second one if the first succeeded. Concatenates results in a product.
  */
 
 #ifndef CPPCMB_PARSERS_SEQ_HPP

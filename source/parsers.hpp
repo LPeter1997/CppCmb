@@ -16,7 +16,10 @@
 #include "parsers/eager_alt.hpp"
 #include "parsers/end.hpp"
 #include "parsers/epsilon.hpp"
+#include "parsers/many.hpp"
+#include "parsers/many1.hpp"
 #include "parsers/one.hpp"
+#include "parsers/opt.hpp"
 #include "parsers/seq.hpp"
 
 #endif /* CPPCMB_PARSERS_HPP */
