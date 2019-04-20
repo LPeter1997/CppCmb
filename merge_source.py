@@ -35,10 +35,11 @@ class ParseState(Enum):
 
 def process_file(root, fname):
     full_path = os.path.join(root, fname)
-    if (full_path in processed_files):
+    canon_path = os.path.realpath(full_path)
+    if (canon_path in processed_files):
         return ''
 
-    processed_files.add(full_path)
+    processed_files.add(canon_path)
 
     base = os.path.splitext(os.path.basename(full_path))[0].upper()
     g_ifndef = fr'#ifndef {INCLUDE_GUARD_PREFIX}_(\w*){base}_HPP'
