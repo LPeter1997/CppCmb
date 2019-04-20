@@ -11,7 +11,12 @@
 #define CPPCMB_PARSERS_HPP
 
 #include "parsers/action.hpp"
+#include "parsers/alt.hpp"
 #include "parsers/combinator.hpp"
+#include "parsers/eager_alt.hpp"
+#include "parsers/end.hpp"
 #include "parsers/epsilon.hpp"
+#include "parsers/one.hpp"
+#include "parsers/seq.hpp"
 
 #endif /* CPPCMB_PARSERS_HPP */
