@@ -8,12 +8,13 @@
  * apply transformations.
  */
 
-#ifndef CPPCMB_COMBINATOR_HPP
-#define CPPCMB_COMBINATOR_HPP
+#ifndef CPPCMB_PARSERS_COMBINATOR_HPP
+#define CPPCMB_PARSERS_COMBINATOR_HPP
 
 #include <type_traits>
 #include <utility>
-#include "detail.hpp"
+#include "../detail.hpp"
+#include "../reader.hpp"
 
 namespace cppcmb {
 
@@ -145,4 +146,4 @@ using parser_value_t = detail::remove_cvref_t<decltype(
 
 } /* namespace cppcmb */
 
-#endif /* CPPCMB_COMBINATOR_HPP */
+#endif /* CPPCMB_PARSERS_COMBINATOR_HPP */
