@@ -1,3 +1,4 @@
+import datetime
 import glob
 import os
 import re
@@ -12,6 +13,9 @@ TOP_INCLUDE = 'cppcmb.hpp'
 FILE_PREFIX = f"""
 /**
  * {TARGET_PATH}
+ *
+ * This file has been merged from multiple source files.
+ * Generation date: {datetime.datetime.now()}
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.

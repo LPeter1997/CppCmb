@@ -1,6 +1,9 @@
 /**
  * cppcmb.hpp
  *
+ * This file has been merged from multiple source files.
+ * Generation date: 2019-04-20 18:34:44.965232
+ *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
  *
