@@ -65,7 +65,7 @@ noexcept(noexcept(action_t(std::declval<__VA_ARGS__>(), cppcmb_fwd(fn))))
  * The actual type that all other combinators have to derive from.
  */
 template <typename Self>
-class combinator : private detail::crtp<Self>,
+class combinator : public detail::crtp<Self>,
                    private detail::combinator_base {
 public:
     template <typename Fn>
@@ -111,7 +111,7 @@ using apply_t = decltype(
 
 template <typename T, typename Src>
 inline constexpr bool has_parser_interface_v =
-       is_detected_v<apply_t, T, Src>,
+       is_detected_v<apply_t, T, Src>
     && is_combinator_v<T>;
 
 } /* namespace detail */

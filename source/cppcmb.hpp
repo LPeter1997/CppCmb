@@ -13,10 +13,13 @@
 #include "apply_value.hpp"
 #include "detail.hpp"
 #include "maybe.hpp"
+#include "memo_context.hpp"
+#include "parser.hpp"
 #include "parsers.hpp"
 #include "product.hpp"
 #include "reader.hpp"
 #include "result.hpp"
 #include "sum.hpp"
+#include "transformations.hpp"
 
 #endif /* CPPCMB_CPPCMB_HPP */

@@ -13,13 +13,17 @@
 #include "parsers/action.hpp"
 #include "parsers/alt.hpp"
 #include "parsers/combinator.hpp"
+#include "parsers/drec_packrat.hpp"
 #include "parsers/eager_alt.hpp"
 #include "parsers/end.hpp"
 #include "parsers/epsilon.hpp"
+#include "parsers/irec_packrat.hpp"
 #include "parsers/many.hpp"
 #include "parsers/many1.hpp"
 #include "parsers/one.hpp"
 #include "parsers/opt.hpp"
+#include "parsers/packrat.hpp"
+#include "parsers/rule.hpp"
 #include "parsers/seq.hpp"
 
 #endif /* CPPCMB_PARSERS_HPP */

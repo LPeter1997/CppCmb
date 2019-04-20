@@ -13,7 +13,7 @@
 
 #include <type_traits>
 
-namespace cppcmp {
+namespace cppcmb {
 namespace detail {
 
 template <typename T>
@@ -23,6 +23,6 @@ template <typename T>
 using remove_cvref_t = typename remove_cvref<T>::type;
 
 } /* namespace detail */
-} /* namespace cppcmp */
+} /* namespace cppcmb */
 
 #endif /* CPPCMB_DETAIL_REMOVE_CVREF_HPP */

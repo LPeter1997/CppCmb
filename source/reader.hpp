@@ -34,7 +34,7 @@ using msize_t = decltype(std::size(std::declval<T>()));
 // Readable source concept for the reader
 template <typename T>
 inline constexpr bool is_reader_source_v =
-       is_detected_v<element_at_t, T>,
+       is_detected_v<element_at_t, T>
     && is_detected_v<msize_t, T>;
 
 } /* namespace detail */

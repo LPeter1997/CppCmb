@@ -6,7 +6,7 @@ from enum import Enum
 
 INCLUDE_GUARD_PREFIX = 'CPPCMB'
 SOURCE_PATH = 'source'
-TARGET_PATH = 'cppcmb2.hpp'
+TARGET_PATH = 'cppcmb.hpp'
 TOP_INCLUDE = 'cppcmb.hpp'
 
 FILE_PREFIX = f"""
