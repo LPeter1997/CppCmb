@@ -23,6 +23,7 @@
 #include "parsers/one.hpp"
 #include "parsers/opt.hpp"
 #include "parsers/packrat.hpp"
+#include "parsers/regex.hpp"
 #include "parsers/rule.hpp"
 #include "parsers/seq.hpp"
 #include "parsers/todo.hpp"

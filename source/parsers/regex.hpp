@@ -22,6 +22,7 @@
 #include "../detail.hpp"
 #include "../reader.hpp"
 #include "../transformations/filter.hpp"
+#include "../transformations/select.hpp"
 
 namespace cppcmb {
 

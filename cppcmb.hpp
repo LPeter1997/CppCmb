@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-21 15:11:07.627584
+ * Generation date: 2019-04-21 22:49:55.836130
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -20,6 +20,7 @@
 #include <deque>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -2324,6 +2325,8 @@ constexpr auto operator%=(P&& parser, as_memo_i_t)
 
 } /* namespace cppcmb */
 
+// XXX(LPeter1997): We could check the collection for push_back (better errors)
+
 namespace cppcmb {
 
 /**
@@ -2604,68 +2607,6 @@ template <typename P, cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
 
 namespace cppcmb {
 
-namespace detail {
-
-// XXX(LPeter1997): Can this be constexpr?
-/**
- * This is where all the rules are stored internally.
- * They allow us to do a nice assignment-syntax.
- */
-template <typename>
-inline /* constexpr */ auto rule_set = 0;
-
-template <typename, typename U>
-struct second {
-    using type = U;
-};
-
-} /* namespace detail */
-
-template <typename Val, typename Tag>
-class rule_t : public combinator<rule_t<Val, Tag>> {
-public:
-    using tag_type = Tag;
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<Val> {
-        return cppcmb_parse_rule(*this, r);
-    }
-};
-
-/**
- * Used to declare rules.
- */
-#define cppcmb_decl(name, ...) \
-auto const name =              \
-::cppcmb::rule_t<__VA_ARGS__, struct cppcmb_unique_id(cppcmb_rule_tag)>()
-
-// XXX(LPeter1997): The use of the inline variable like this is IFNDR...
-// We need an alternative solution!
-// XXX(LPeter1997): Noexcept specifier
-/**
- * Used to define rules.
- * Generates the function that does the indirect-call.
- */
-#define cppcmb_def(name)                                            \
-template <typename Src>                                             \
-[[nodiscard]] constexpr auto                                        \
-cppcmb_parse_rule(decltype(name), ::cppcmb::reader<Src> const& r) { \
-    using tag_type = typename decltype(name)::tag_type;             \
-    auto const& p = ::cppcmb::detail::rule_set<                     \
-        typename ::cppcmb::detail::second<Src, tag_type>::type      \
-    >;                                                              \
-    return p.apply(r);                                              \
-}                                                                   \
-template <>                                                         \
-inline /* constexpr */ auto                                         \
-::cppcmb::detail::rule_set<typename decltype(name)::tag_type>
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
 template <typename P1, typename P2>
 class seq_t : public combinator<seq_t<P1, P2>> {
 private:
@@ -2753,33 +2694,6 @@ template <typename P1, typename P2,
 
 namespace cppcmb {
 
-template <typename T>
-struct todo_t  {
-    template <typename... Ts>
-    [[nodiscard]] constexpr T operator()(Ts&&...) const noexcept {
-        cppcmb_panic("Unimplemented feature! (TODO used)");
-        return *(T*)nullptr;
-    }
-};
-
-// Value template
-template <typename T>
-inline constexpr auto todo = todo_t<T>();
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-// XXX(LPeter1997): Maybe it's better to explicitly implement the parser for
-// better error messages?
-
-template <typename T>
-inline constexpr auto todo_parser = epsilon[todo<T>];
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
 template <typename Pred>
 class filter {
 private:
@@ -2843,6 +2757,276 @@ public:
 
 template <std::size_t... Ns>
 inline constexpr auto select = select_t<Ns...>();
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+namespace detail {
+namespace regex {
+
+/**
+ * <top>    ::= <term> '|' <top>
+ *            | <term>
+ *            ;
+ *
+ * <term>   ::= <factor> <term>
+ *            ;
+ *
+ * <factor> ::= <atom> '*'?
+ *            ;
+ *
+ * <atom>   ::= CHAR
+ *            | '\' CHAR
+ *            | <char_grouping>
+ *            | '(' <top> ')'
+ *            ;
+ */
+
+template <char Ch>
+constexpr bool is_char(char c) { return c == Ch; }
+
+template <char Ch>
+inline constexpr auto ch = one[filter(is_char<Ch>)][select<>];
+
+// XXX(LPeter1997): We publish something like this in the API
+/**
+ * A dummy collection interface.
+ */
+template <typename>
+class drop_collection {
+private:
+    std::size_t cnt = 0;
+
+public:
+    template <typename TFwd>
+    constexpr void push_back(TFwd&&) noexcept {
+        ++cnt;
+    }
+
+    [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
+};
+
+struct parser {
+    template <typename T>
+    static constexpr bool is_failure(T) {
+        return std::is_same_v<remove_cvref_t<T>, failure>;
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr char char_at(Src src) noexcept {
+        return src()[Idx];
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto top(Src src) noexcept {
+        constexpr auto lhs = term<Idx>(src);
+        static_assert(!is_failure(lhs));
+        constexpr std::size_t NextIdx = Idx + lhs.matched();
+        if constexpr (char_at<NextIdx>(src) == '|') {
+            constexpr auto rhs = top<NextIdx + 1>(src);
+            static_assert(!is_failure(rhs));
+            return success(
+                lhs.value() | rhs.value(),
+                lhs.matched() + 1 + rhs.matched()
+            );
+        }
+        else {
+            return lhs;
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto term(Src src) noexcept {
+        constexpr auto lhs = factor<Idx>(src);
+        static_assert(!is_failure(lhs));
+        constexpr std::size_t NextIdx = Idx + lhs.matched();
+        return term_impl<NextIdx>(lhs, src);
+    }
+
+    template <std::size_t Idx, typename Res, typename Src>
+    [[nodiscard]] static constexpr auto term_impl(Res res, Src src) noexcept {
+        if constexpr (src().size() <= Idx) {
+            return res;
+        }
+        else {
+            constexpr auto lhs = factor<Idx>(src);
+            if constexpr (is_failure(lhs)) {
+                return res;
+            }
+            else {
+                constexpr std::size_t NextIdx = Idx + lhs.matched();
+                return term_impl<NextIdx>(
+                    success(
+                        res.value() & lhs.value(),
+                        res.matched() + lhs.matched()
+                    ),
+                    src
+                );
+            }
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto factor(Src src) noexcept {
+        constexpr auto lhs = atom<Idx>(src);
+        if constexpr (is_failure(lhs)) {
+            return failure();
+        }
+        else {
+            constexpr std::size_t NextIdx = Idx + lhs.matched();
+            if constexpr (char_at<NextIdx>(src) == '*') {
+                return success(
+                    *lhs.value() >> collect_to<drop_collection>,
+                    lhs.matched() + 1
+                );
+            }
+            else {
+                return lhs;
+            }
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto atom(Src src) noexcept {
+        if constexpr (char_at<Idx>(src) == '(') {
+            // Grouping
+            constexpr auto sub = top<Idx + 1>(src);
+            static_assert(!is_failure(sub));
+            constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
+            static_assert(char_at<NextIdx>(src) == ')');
+            return success(
+                sub.value(),
+                sub.matched() + 2
+            );
+        }
+        else if constexpr (Idx < src().size()) {
+            // Single character
+            if constexpr (char_at<Idx>(src) == ')') {
+                return failure();
+            }
+            else if constexpr (char_at<Idx>(src) == '|') {
+                return failure();
+            }
+            else {
+                return success(
+                    ch<char_at<Idx>(src)>,
+                    1
+                );
+            }
+        }
+        else {
+            failure();
+        }
+    }
+};
+
+} /* namespace regex */
+} /* namespace detail */
+
+/**
+ * A way to define compile-time strings.
+ */
+#define cppcmb_str(str) ([]() -> std::string_view { return str; })
+
+template <typename Str>
+[[nodiscard]] constexpr auto regex(Str str) noexcept {
+    constexpr auto res = detail::regex::parser::top<0>(str);
+    static_assert(
+        !detail::regex::parser::is_failure(res),
+        "Invalid regular-expression!"
+    );
+    return res.value();
+}
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+namespace detail {
+
+// XXX(LPeter1997): Can this be constexpr?
+/**
+ * This is where all the rules are stored internally.
+ * They allow us to do a nice assignment-syntax.
+ */
+template <typename>
+inline /* constexpr */ auto rule_set = 0;
+
+template <typename, typename U>
+struct second {
+    using type = U;
+};
+
+} /* namespace detail */
+
+template <typename Val, typename Tag>
+class rule_t : public combinator<rule_t<Val, Tag>> {
+public:
+    using tag_type = Tag;
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<Val> {
+        return cppcmb_parse_rule(*this, r);
+    }
+};
+
+/**
+ * Used to declare rules.
+ */
+#define cppcmb_decl(name, ...) \
+auto const name =              \
+::cppcmb::rule_t<__VA_ARGS__, struct cppcmb_unique_id(cppcmb_rule_tag)>()
+
+// XXX(LPeter1997): The use of the inline variable like this is IFNDR...
+// We need an alternative solution!
+// XXX(LPeter1997): Noexcept specifier
+/**
+ * Used to define rules.
+ * Generates the function that does the indirect-call.
+ */
+#define cppcmb_def(name)                                            \
+template <typename Src>                                             \
+[[nodiscard]] constexpr auto                                        \
+cppcmb_parse_rule(decltype(name), ::cppcmb::reader<Src> const& r) { \
+    using tag_type = typename decltype(name)::tag_type;             \
+    auto const& p = ::cppcmb::detail::rule_set<                     \
+        typename ::cppcmb::detail::second<Src, tag_type>::type      \
+    >;                                                              \
+    return p.apply(r);                                              \
+}                                                                   \
+template <>                                                         \
+inline /* constexpr */ auto                                         \
+::cppcmb::detail::rule_set<typename decltype(name)::tag_type>
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename T>
+struct todo_t  {
+    template <typename... Ts>
+    [[nodiscard]] constexpr T operator()(Ts&&...) const noexcept {
+        cppcmb_panic("Unimplemented feature! (TODO used)");
+        return *(T*)nullptr;
+    }
+};
+
+// Value template
+template <typename T>
+inline constexpr auto todo = todo_t<T>();
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+// XXX(LPeter1997): Maybe it's better to explicitly implement the parser for
+// better error messages?
+
+template <typename T>
+inline constexpr auto todo_parser = epsilon[todo<T>];
 
 } /* namespace cppcmb */
 
