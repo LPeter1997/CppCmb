@@ -21,6 +21,9 @@ namespace cppcmb {
  */
 template <typename T>
 class some {
+public:
+    using value_type = T;
+
 private:
     cppcmb_self_check(some);
 
@@ -49,11 +52,12 @@ class none {};
  */
 template <typename T>
 class maybe {
-private:
-    cppcmb_self_check(maybe);
-
+public:
     using some_type = ::cppcmb::some<T>;
     using none_type = ::cppcmb::none;
+
+private:
+    cppcmb_self_check(maybe);
 
     std::variant<some_type, none_type> m_Data;
 

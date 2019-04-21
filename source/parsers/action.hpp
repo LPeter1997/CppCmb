@@ -18,6 +18,19 @@
 
 namespace cppcmb {
 
+namespace detail {
+
+/**
+ * Just to improve error messages.
+ */
+struct action_apply_helper {
+    template <typename Fn, typename T>
+    constexpr auto operator()(Fn const& f, T&& v) const
+        cppcmb_return(apply_value(f, cppcmb_fwd(v)))
+};
+
+} /* namespace detail */
+
 template <typename P, typename Fn>
 class action_t : public combinator<action_t<P, Fn>> {
 private:
@@ -41,17 +54,7 @@ public:
         cppcmb_assert_parser(P, Src);
 
         using value_t = parser_value_t<P, Src>;
-
         using apply_t = decltype(&action_t::apply_fn<value_t&&>);
-        // XXX(LPeter1997): Maybe check with invoke result
-        // to make sure type-deduction happened?
-        static_assert(
-            std::is_invocable_v<apply_t, action_t, value_t>,
-            "The given action function must be invocable with the parser's "
-            "successful value type!"
-            " (note: the function's invocation must be const-qualified!)"
-        );
-
         using fn_result_t = std::invoke_result_t<apply_t, action_t, value_t>;
         using dispatch_tag =
             detail::is_maybe<detail::remove_cvref_t<fn_result_t>>;
@@ -60,10 +63,21 @@ public:
     }
 
 private:
+    /**
+     * Original solution:
+     *
+     * template <typename T>
+     * using maybe_value_t = detail::remove_cvref_t<decltype(
+     *      std::declval<T>().some().value()
+     * )>;
+     *
+     * But it triggered a GCC internal compiler error.
+     */
     template <typename T>
-    using maybe_value_t = detail::remove_cvref_t<decltype(
-        std::declval<T>().some().value()
-    )>;
+    using maybe_some_t = typename detail::remove_cvref_t<T>::some_type;
+
+    template <typename T>
+    using maybe_value_t = typename maybe_some_t<T>::value_type;
 
     // XXX(LPeter1997): Noexcept specifier
     // Action can fail
@@ -124,6 +138,12 @@ private:
     // Invoke the function with a value
     template <typename T>
     [[nodiscard]] constexpr decltype(auto) apply_fn(T&& val) const {
+        static_assert(
+            std::is_invocable_v<detail::action_apply_helper, Fn, T&&>,
+             "The given action function must be invocable with the parser's "
+             "successful value type! "
+             "(note: the function's invocation must be const-qualified!)"
+        );
         return apply_value(m_Fn, cppcmb_fwd(val));
     }
 };
