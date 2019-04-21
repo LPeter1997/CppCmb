@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-21 14:43:03.543299
+ * Generation date: 2019-04-21 15:11:07.627584
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -152,6 +152,11 @@ namespace detail {
  * Assertion with a custom message.
  */
 #define cppcmb_assert(msg, ...) assert(((void)msg, (__VA_ARGS__)))
+
+/**
+ * Panic (assertion failure) with a custom message.
+ */
+#define cppcmb_panic(msg) cppcmb_assert(msg, false)
 
 /**
  * Concatenates two tokens.
@@ -2743,6 +2748,33 @@ template <typename P1, typename P2,
     cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
 [[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
     cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename T>
+struct todo_t  {
+    template <typename... Ts>
+    [[nodiscard]] constexpr T operator()(Ts&&...) const noexcept {
+        cppcmb_panic("Unimplemented feature! (TODO used)");
+        return *(T*)nullptr;
+    }
+};
+
+// Value template
+template <typename T>
+inline constexpr auto todo = todo_t<T>();
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+// XXX(LPeter1997): Maybe it's better to explicitly implement the parser for
+// better error messages?
+
+template <typename T>
+inline constexpr auto todo_parser = epsilon[todo<T>];
 
 } /* namespace cppcmb */
 

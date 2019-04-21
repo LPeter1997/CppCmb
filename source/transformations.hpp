@@ -12,5 +12,6 @@
 
 #include "transformations/filter.hpp"
 #include "transformations/select.hpp"
+#include "transformations/todo.hpp"
 
 #endif /* CPPCMB_TRANSFORMATIONS_HPP */

@@ -25,6 +25,11 @@ namespace detail {
 #define cppcmb_assert(msg, ...) assert(((void)msg, (__VA_ARGS__)))
 
 /**
+ * Panic (assertion failure) with a custom message.
+ */
+#define cppcmb_panic(msg) cppcmb_assert(msg, false)
+
+/**
  * Concatenates two tokens.
  */
 #define cppcmb_cat(x, y) cppcmb_prelude_cat(x, y)

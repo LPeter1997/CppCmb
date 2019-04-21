@@ -25,5 +25,6 @@
 #include "parsers/packrat.hpp"
 #include "parsers/rule.hpp"
 #include "parsers/seq.hpp"
+#include "parsers/todo.hpp"
 
 #endif /* CPPCMB_PARSERS_HPP */
