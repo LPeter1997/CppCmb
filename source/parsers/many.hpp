@@ -16,6 +16,8 @@
 #include "combinator.hpp"
 #include "../result.hpp"
 
+// XXX(LPeter1997): We could check the collection for push_back (better errors)
+
 namespace cppcmb {
 
 /**
