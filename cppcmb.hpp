@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-21 22:49:55.836130
+ * Generation date: 2019-04-22 08:46:23.532657
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -2807,6 +2807,11 @@ public:
     [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
 };
 
+template <typename T>
+[[nodiscard]] constexpr auto star(T p) noexcept {
+    return action_t((*p >> collect_to<drop_collection>), select<>);
+}
+
 struct parser {
     template <typename T>
     static constexpr bool is_failure(T) {
@@ -2876,8 +2881,9 @@ struct parser {
         else {
             constexpr std::size_t NextIdx = Idx + lhs.matched();
             if constexpr (char_at<NextIdx>(src) == '*') {
+                constexpr auto res = star(lhs.value());
                 return success(
-                    *lhs.value() >> collect_to<drop_collection>,
+                    res,
                     lhs.matched() + 1
                 );
             }
