@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-22 11:59:24.744444
+ * Generation date: 2019-04-22 18:58:39.970347
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -843,23 +843,84 @@ using parser_value_t = detail::remove_cvref_t<decltype(
 
 namespace cppcmb {
 
-template <typename Tag>
-class token {
+/**
+ * Success "type-constructor". The type that the parser returns when it
+ * succeeded.
+ */
+template <typename T>
+class success {
+public:
+    using value_type = T;
+
 private:
-    std::string_view m_Content;
-    Tag              m_Type;
+    value_type  m_Value;
+    std::size_t m_Matched;
 
 public:
-    constexpr token(std::string_view cont, Tag ty) noexcept
-        : m_Content(cont), m_Type(ty) {
+    template <typename TFwd>
+    constexpr success(TFwd&& val, std::size_t matched)
+        noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
+        : m_Value(cppcmb_fwd(val)), m_Matched(matched) {
     }
 
-    [[nodiscard]] constexpr auto const& content() const noexcept {
-        return m_Content;
+    cppcmb_getter(value, m_Value)
+
+    [[nodiscard]] constexpr auto const& matched() const noexcept {
+        return m_Matched;
+    }
+};
+
+template <typename TFwd>
+success(TFwd, std::size_t) -> success<TFwd>;
+
+/**
+ * Failure "type-constructor". The type that the parser returns when it fails.
+ */
+class failure { };
+
+/**
+ * The result type of a parser. It's either a success or a failure type.
+ */
+template <typename T>
+class result {
+public:
+    using success_type = ::cppcmb::success<T>;
+    using failure_type = ::cppcmb::failure;
+
+private:
+    using either_type = std::variant<success_type, failure_type>;
+
+    /**
+     * The packrat parsers will have to fiddle with the furthest values.
+     */
+    template <typename>
+    friend class drec_packrat_t;
+    template <typename>
+    friend class irec_packrat_t;
+
+    either_type m_Data;
+    std::size_t m_Furthest;
+
+public:
+    template <typename TFwd>
+    constexpr result(TFwd&& val, std::size_t furthest)
+        noexcept(std::is_nothrow_constructible_v<either_type, TFwd&&>)
+        : m_Data(cppcmb_fwd(val)), m_Furthest(furthest) {
     }
 
-    [[nodiscard]] constexpr auto const& type() const noexcept {
-        return m_Type;
+    [[nodiscard]] constexpr bool is_success() const noexcept {
+        return std::holds_alternative<success_type>(m_Data);
+    }
+
+    [[nodiscard]] constexpr bool is_failure() const noexcept {
+        return std::holds_alternative<failure_type>(m_Data);
+    }
+
+    cppcmb_getter(success, std::get<success_type>(m_Data))
+    cppcmb_getter(failure, std::get<failure_type>(m_Data))
+
+    [[nodiscard]] constexpr auto const& furthest() const noexcept {
+        return m_Furthest;
     }
 };
 
@@ -867,25 +928,421 @@ public:
 
 namespace cppcmb {
 
+/**
+ * A tag-type for a more uniform alternative syntax.
+ * This can be put as the first element of an alternative chain so every new
+ * line can start with the alternative operator. It's completely ignored.
+ * Example:
+ * auto parser = pass
+ *             | first
+ *             | second
+ *             ;
+ */
+struct pass_t {};
+
+inline constexpr auto pass = pass_t();
+
+template <typename P1, typename P2>
+class alt_t : public combinator<alt_t<P1, P2>> {
+private:
+    template <typename Src>
+    using value_t = sum_values_t<
+        parser_value_t<P1, Src>,
+        parser_value_t<P2, Src>
+    >;
+
+    P1 m_First;
+    P2 m_Second;
+
+public:
+    template <typename P1Fwd, typename P2Fwd>
+    constexpr alt_t(P1Fwd&& p1, P2Fwd&& p2)
+        noexcept(
+            std::is_nothrow_constructible_v<P1, P1Fwd&&>
+         && std::is_nothrow_constructible_v<P2, P2Fwd&&>
+        )
+        : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<value_t<Src>> {
+        cppcmb_assert_parser(P1, Src);
+        cppcmb_assert_parser(P2, Src);
+
+        using result_t = result<value_t<Src>>;
+
+        // Try to apply the first alternative
+        auto p1_inv = m_First.apply(r);
+        if (p1_inv.is_success()) {
+            auto p1_succ = std::move(p1_inv).success();
+            return result_t(
+                success(
+                    sum_values<value_t<Src>>(std::move(p1_succ).value()),
+                    p1_succ.matched()
+                ),
+                p1_inv.furthest()
+            );
+        }
+
+        // Try to apply the second alternative
+        auto p2_inv = m_Second.apply(r);
+        if (p2_inv.is_success()) {
+            auto p2_succ = std::move(p2_inv).success();
+            return result_t(
+                success(
+                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                    p2_succ.matched()
+                ),
+                std::max(p1_inv.furthest(), p2_inv.furthest())
+            );
+        }
+
+        // Both failed, return the error which got further
+        auto p1_err = std::move(p1_inv).failure();
+        auto p2_err = std::move(p2_inv).failure();
+
+        if (p1_inv.furthest() > p2_inv.furthest()) {
+            return result_t(std::move(p1_err), p1_inv.furthest());
+        }
+        else if (p1_inv.furthest() < p2_inv.furthest()) {
+            return result_t(std::move(p2_err), p2_inv.furthest());
+        }
+        else {
+            // They got to the same distance, need to merge errors
+            // XXX(LPeter1997): Implement, for now we just return the first
+            return result_t(std::move(p1_err), p1_inv.furthest());
+        }
+    }
+};
+
+template <typename P1Fwd, typename P2Fwd>
+alt_t(P1Fwd, P2Fwd) -> alt_t<P1Fwd, P2Fwd>;
+
+/**
+ * Operator for making alternatives.
+ */
+template <typename P1, typename P2,
+    cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
+[[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2)
+    cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
+
+/**
+ * Ignore pass.
+ */
+template <typename P2,
+    cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
+[[nodiscard]] constexpr auto operator|(pass_t, P2&& p2)
+    cppcmb_return(cppcmb_fwd(p2))
+
+} /* namespace cppcmb */
+
+// XXX(LPeter1997): We could check the collection for push_back (better errors)
+
+namespace cppcmb {
+
+/**
+ * A type-pack that describes a collection except it's type.
+ * Used for the many and many1 combinators.
+ */
+template <
+    template <typename...> typename Coll,
+    template <typename> typename... Ts
+>
+struct collect_to_t {
+    template <typename T>
+    using type = Coll<T, Ts<T>...>;
+};
+
+template <
+    template <typename...> typename Coll,
+    template <typename> typename... Ts
+>
+inline constexpr auto collect_to = collect_to_t<Coll, Ts...>();
+
 namespace detail {
 
-/*template <typename Tag>
-class token_parser : public combinator<token_parser</* TODO *//*>> {
+/**
+ * Tag-type for many and many1.
+ */
+struct many_tag {};
 
-};*/
+/**
+ * SFINAE for many types.
+ */
+template <typename T>
+inline constexpr bool is_many_v = std::is_base_of_v<many_tag, T>;
 
 } /* namespace detail */
 
-template <typename Src, typename Tag>
-class token_rule {
+template <typename P, typename To = collect_to_t<std::vector>>
+class many_t : public combinator<many_t<P>>,
+               private detail::many_tag {
 private:
+    cppcmb_self_check(many_t);
 
+    template <typename Src>
+    using value_t = typename To::template type<parser_value_t<P, Src>>;
+
+    P m_Parser;
+
+public:
+    template <typename PFwd, cppcmb_requires_t(!is_self_v<PFwd>)>
+    constexpr many_t(PFwd&& p)
+        noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
+        : m_Parser(cppcmb_fwd(p)) {
+    }
+
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) &
+        cppcmb_return(many_t<P, To2>(m_Parser))
+
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) const&
+        cppcmb_return(many_t<P, To2>(m_Parser))
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) &&
+        cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) const&&
+        cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
+
+    cppcmb_getter(underlying, m_Parser)
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<value_t<Src>> {
+        cppcmb_assert_parser(P, Src);
+
+        using result_t = result<value_t<Src>>;
+
+        std::size_t furthest = 0U;
+        std::size_t matched = 0U;
+        auto coll = value_t<Src>();
+        auto rr = r;
+        while (true) {
+            auto p_inv = m_Parser.apply(rr);
+            furthest = std::max(furthest, matched + p_inv.furthest());
+            if (p_inv.is_failure()) {
+                // Stop applying
+                break;
+            }
+            auto p_succ = std::move(p_inv).success();
+            matched += p_succ.matched();
+            // Add to collection
+            coll.push_back(std::move(p_succ).value());
+            // Move reader
+            rr.seek(rr.cursor() + p_succ.matched());
+        }
+        return result_t(success(std::move(coll), matched), furthest);
+    }
 };
 
-template <typename MainRule>
-class lexer {
+template <typename PFwd>
+many_t(PFwd) -> many_t<PFwd>;
 
+/**
+ * Operator for making many parser.
+ */
+template <typename P, cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+[[nodiscard]] constexpr auto operator*(P&& p)
+    cppcmb_return(many_t(cppcmb_fwd(p)))
+
+/**
+ * Operator to collect 'many' and 'many1' to a different container.
+ */
+template <typename P, typename To,
+    cppcmb_requires_t(detail::is_many_v<detail::remove_cvref_t<P>>)>
+[[nodiscard]] constexpr auto operator>>(P&& p, To to)
+    cppcmb_return(cppcmb_fwd(p).collect_to(to))
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename P, typename To = collect_to_t<std::vector>>
+class many1_t : public combinator<many1_t<P>>,
+                private detail::many_tag {
+private:
+    cppcmb_self_check(many1_t);
+
+    template <typename Src>
+    using value_t = parser_value_t<many_t<P, To>, Src>;
+
+    many_t<P, To> m_Parser;
+
+public:
+    template <typename PFwd, cppcmb_requires_t(!is_self_v<PFwd>)>
+    constexpr many1_t(PFwd&& p)
+        noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
+        : m_Parser(many_t<P, To>(cppcmb_fwd(p))) {
+    }
+
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) &
+        cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) const&
+        cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) &&
+        cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
+    template <typename To2>
+    [[nodiscard]] constexpr auto collect_to(To2) const&&
+        cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<value_t<Src>> {
+        cppcmb_assert_parser(P, Src);
+
+        using result_t = result<value_t<Src>>;
+
+        auto p_inv = m_Parser.apply(r);
+
+        cppcmb_assert(
+            "The underlying 'many' parser must always succeed!",
+            p_inv.is_success()
+        );
+
+        auto p_succ = std::move(p_inv).success();
+        if (p_succ.value().size() > 0) {
+            // Succeed
+            return result_t(std::move(p_succ), p_inv.furthest());
+        }
+        else {
+            // Fail
+            return result_t(failure(), p_inv.furthest());
+        }
+    }
 };
+
+template <typename PFwd>
+many1_t(PFwd) -> many1_t<PFwd>;
+
+/**
+ * Operator for making many1 parser.
+ */
+template <typename P, cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
+[[nodiscard]] constexpr auto operator+(P&& p)
+    cppcmb_return(many1_t(cppcmb_fwd(p)))
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+class one_t : public combinator<one_t> {
+public:
+    // XXX(LPeter1997): Do we need typename here?
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<typename reader<Src>::value_type> {
+
+        using result_t = result<typename reader<Src>::value_type>;
+
+        if (r.is_end()) {
+            // Nothing to consume
+            return result_t(failure(), 0U);
+        }
+        else {
+            return result_t(success(r.current(), 1U), 1U);
+        }
+    }
+};
+
+// Value for 'one' parser
+inline constexpr one_t one = one_t();
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename P1, typename P2>
+class seq_t : public combinator<seq_t<P1, P2>> {
+private:
+    template <typename Src>
+    using value_t = decltype(product_values(
+        std::declval<parser_value_t<P1, Src>>(),
+        std::declval<parser_value_t<P2, Src>>()
+    ));
+
+    P1 m_First;
+    P2 m_Second;
+
+public:
+    template <typename P1Fwd, typename P2Fwd>
+    constexpr seq_t(P1Fwd&& p1, P2Fwd&& p2)
+        noexcept(
+            std::is_nothrow_constructible_v<P1, P1Fwd&&>
+         && std::is_nothrow_constructible_v<P2, P2Fwd&&>
+        )
+        : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<value_t<Src>> {
+        cppcmb_assert_parser(P1, Src);
+        cppcmb_assert_parser(P2, Src);
+
+        using result_t = result<value_t<Src>>;
+
+        auto p1_inv = m_First.apply(r);
+        if (p1_inv.is_failure()) {
+            // Early failure, don't continue
+            return result_t(std::move(p1_inv).failure(), p1_inv.furthest());
+        }
+        // Get the success alternative
+        auto p1_succ = std::move(p1_inv).success();
+        // Create the next reader
+        auto r2 = reader(
+            r.source(), r.cursor() + p1_succ.matched(), r.context_ptr()
+        );
+        // Invoke the second parser
+        auto p2_inv = m_Second.apply(r2);
+        // Max peek distance
+        auto max_furthest = std::max(
+            p1_inv.furthest(),
+            p1_succ.matched() + p2_inv.furthest()
+        );
+        if (p2_inv.is_failure()) {
+            // Second failed, fail on that error
+            return result_t(
+                std::move(p2_inv).failure(),
+                max_furthest
+            );
+        }
+        // Get the success alternative
+        auto p2_succ = std::move(p2_inv).success();
+        // Combine the values
+        return result_t(
+            success(
+                product_values(
+                    std::move(p1_succ).value(),
+                    std::move(p2_succ).value()
+                ),
+                p1_succ.matched() + p2_succ.matched()
+            ),
+            max_furthest
+        );
+    }
+};
+
+template <typename P1Fwd, typename P2Fwd>
+seq_t(P1Fwd, P2Fwd) -> seq_t<P1Fwd, P2Fwd>;
+
+/**
+ * Operator for making a sequence.
+ */
+template <typename P1, typename P2,
+    cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
+[[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
+    cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
 
 } /* namespace cppcmb */
 
@@ -960,6 +1417,639 @@ namespace detail {
 cppcmb_is_specialization(maybe);
 
 } /* namespace detail */
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename Pred>
+class filter {
+private:
+    cppcmb_self_check(filter);
+
+    template <typename... Ts>
+    using value_t = decltype(product_values(
+        std::declval<Ts>()...
+    ));
+
+    Pred m_Predicate;
+
+public:
+    template <typename PredFwd, cppcmb_requires_t(!is_self_v<PredFwd>)>
+    constexpr filter(PredFwd&& pred)
+        noexcept(std::is_nothrow_constructible_v<Pred, PredFwd&&>)
+        : m_Predicate(cppcmb_fwd(pred)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename... Ts>
+    [[nodiscard]] constexpr auto operator()(Ts&&... args) const
+        -> maybe<value_t<Ts&&...>> {
+        static_assert(
+            std::is_invocable_v<Pred, Ts&&...>,
+            "The predicate must be invocable with the parser value!"
+        );
+        using result_t = std::invoke_result_t<Pred, Ts&&...>;
+        static_assert(
+            std::is_convertible_v<result_t, bool>,
+            "The predicate must return a type that is convertible to bool!"
+        );
+
+        if (m_Predicate(args...)) {
+            return some(product_values(cppcmb_fwd(args)...));
+        }
+        else {
+            return none();
+        }
+    }
+};
+
+template <typename PredFwd>
+filter(PredFwd) -> filter<PredFwd>;
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <std::size_t... Ns>
+class select_t {
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename... Ts>
+    [[nodiscard]] constexpr decltype(auto) operator()(Ts&&... args) const {
+        return product_values(
+            std::get<Ns>(std::tuple(cppcmb_fwd(args)...))...
+        );
+    }
+};
+
+template <std::size_t... Ns>
+inline constexpr auto select = select_t<Ns...>();
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+namespace detail {
+namespace regex {
+
+/**
+ * <top>           ::= <term> '|' <top>
+ *                   | <term>
+ *                   ;
+ *
+ * <term>          ::= <factor> <term>
+ *                   | <factor>
+ *                   ;
+ *
+ * <factor>        ::= <atom> '*'
+ *                   | <atom> '+'
+ *                   | <atom> '?'
+ *                   | <atom>
+ *                   ;
+ *
+ * <atom>          ::= '(' <top> ')'
+ *                   | '[' <char_grouping> ']'
+ *                   | <literal>
+ *                   ;
+ *
+ * <char_grouping> ::= <group_element> <char_grouping>
+ *                   | <group_element>
+ *                   ;
+ *
+ * <group_element> ::= '\' '-'
+ *                   | <literal> '-' <literal>
+ *                   | <literal>
+ *                   ;
+ *
+ * <literal>       ::= CHAR
+ *                   | '\' SPECIAL_CHAR
+ *                   ;
+ */
+
+template <char Ch>
+constexpr bool is_char(char c) { return c == Ch; }
+
+template <char Ch>
+inline constexpr auto ch = one[filter(is_char<Ch>)][select<>];
+
+template <char Ch1, char Ch2>
+constexpr bool is_range(char c) {
+    static_assert(Ch1 <= Ch2);
+    return c >= Ch1 && c <= Ch2;
+}
+
+template <char Ch1, char Ch2>
+inline constexpr auto range = one[filter(is_range<Ch1, Ch2>)][select<>];
+
+// XXX(LPeter1997): We publish something like this in the API
+/**
+ * A dummy collection interface.
+ */
+template <typename>
+class drop_collection {
+private:
+    std::size_t cnt = 0;
+
+public:
+    template <typename TFwd>
+    constexpr void push_back(TFwd&&) noexcept {
+        ++cnt;
+    }
+
+    [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
+};
+
+struct parser {
+    template <typename T>
+    [[nodiscard]] static constexpr auto star(T p) noexcept {
+        return action_t((*p >> collect_to<drop_collection>), select<>);
+    }
+
+    template <typename T>
+    [[nodiscard]] static constexpr auto plus(T p) noexcept {
+        return action_t((+p >> collect_to<drop_collection>), select<>);
+    }
+
+    template <typename T>
+    [[nodiscard]] static constexpr auto qmark(T p) noexcept {
+        return action_t(-p, select<>);
+    }
+
+    template <typename T>
+    static constexpr bool is_failure(T) {
+        return std::is_same_v<remove_cvref_t<T>, failure>;
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr char char_at(Src src) noexcept {
+        return src()[Idx];
+    }
+
+    [[nodiscard]] static constexpr bool is_special(char ch) noexcept {
+        return ch == '(' || ch == ')'
+            || ch == '[' || ch == ']'
+            || ch == '*' || ch == '+'
+            || ch == '|' || ch == '?'
+            || ch == '\\'
+            ;
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto top(Src src) noexcept {
+        constexpr auto lhs = term<Idx>(src);
+        static_assert(!is_failure(lhs));
+        constexpr std::size_t NextIdx = Idx + lhs.matched();
+        if constexpr (char_at<NextIdx>(src) == '|') {
+            constexpr auto rhs = top<NextIdx + 1>(src);
+            static_assert(!is_failure(rhs));
+            return success(
+                lhs.value() | rhs.value(),
+                lhs.matched() + 1 + rhs.matched()
+            );
+        }
+        else {
+            return lhs;
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto term(Src src) noexcept {
+        constexpr auto lhs = factor<Idx>(src);
+        static_assert(!is_failure(lhs));
+        constexpr std::size_t NextIdx = Idx + lhs.matched();
+        return term_impl<NextIdx>(lhs, src);
+    }
+
+    template <std::size_t Idx, typename Res, typename Src>
+    [[nodiscard]] static constexpr auto term_impl(Res res, Src src) noexcept {
+        if constexpr (src().size() <= Idx) {
+            return res;
+        }
+        else {
+            constexpr auto lhs = factor<Idx>(src);
+            if constexpr (is_failure(lhs)) {
+                return res;
+            }
+            else {
+                constexpr std::size_t NextIdx = Idx + lhs.matched();
+                return term_impl<NextIdx>(
+                    success(
+                        res.value() & lhs.value(),
+                        res.matched() + lhs.matched()
+                    ),
+                    src
+                );
+            }
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto factor(Src src) noexcept {
+        constexpr auto lhs = atom<Idx>(src);
+        if constexpr (is_failure(lhs)) {
+            return failure();
+        }
+        else {
+            constexpr std::size_t NextIdx = Idx + lhs.matched();
+            constexpr char curr = char_at<NextIdx>(src);
+            if constexpr (curr == '*') {
+                return success(star(lhs.value()), lhs.matched() + 1);
+            }
+            else if constexpr (curr == '+') {
+                return success(plus(lhs.value()), lhs.matched() + 1);
+            }
+            else if constexpr (curr == '?') {
+                return success(qmark(lhs.value()), lhs.matched() + 1);
+            }
+            else {
+                return lhs;
+            }
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto atom(Src src) noexcept {
+        if constexpr (Idx < src().size()) {
+            constexpr char curr = char_at<Idx>(src);
+            if constexpr (curr == '(') {
+                // Grouping
+                constexpr auto sub = top<Idx + 1>(src);
+                static_assert(!is_failure(sub));
+                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
+                static_assert(char_at<NextIdx>(src) == ')');
+                return success(sub.value(), sub.matched() + 2);
+            }
+            else if constexpr (curr == '[') {
+                // Character classes
+                constexpr auto sub = char_grouping<Idx + 1>(src);
+                static_assert(!is_failure(sub));
+                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
+                static_assert(char_at<NextIdx>(src) == ']');
+                return success(sub.value(), sub.matched() + 2);
+            }
+            else {
+                return literal<Idx>(src);
+            }
+        }
+        else {
+            failure();
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto char_grouping(Src src) noexcept {
+        constexpr auto lhs = group_element<Idx>(src);
+        static_assert(!is_failure(lhs));
+        return char_grouping_impl<Idx + lhs.matched()>(lhs, src);
+    }
+
+    template <std::size_t Idx, typename Res, typename Src>
+    [[nodiscard]]
+    static constexpr auto char_grouping_impl(Res res, Src src) noexcept {
+        constexpr auto lhs = group_element<Idx>(src);
+        if constexpr (is_failure(lhs)) {
+            return res;
+        }
+        else {
+            return char_grouping_impl<Idx + lhs.matched()>(
+                success(
+                    res.value() | lhs.value(),
+                    res.matched() + lhs.matched()
+                ),
+                src
+            );
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto group_element(Src src) noexcept {
+        if constexpr (char_at<Idx>(src) == '\\'
+                   && char_at<Idx + 1>(src) == '-') {
+            return success(ch<'-'>, 2);
+        }
+        else {
+            constexpr auto lit = literal_ch<Idx>(src);
+            if constexpr (is_failure(lit)) {
+                return failure();
+            }
+            else {
+                constexpr std::size_t NextIdx = Idx + lit.matched();
+                if constexpr (char_at<NextIdx>(src) == '-') {
+                    constexpr auto lit2 = literal_ch<NextIdx + 1>(src);
+                    if constexpr (is_failure(lit2)) {
+                        // No right-hand-side, only consumed lit
+                        return success(ch<lit.value()>, lit.matched());
+                    }
+                    else {
+                        // Char range
+                        return success(
+                            range<lit.value(), lit2.value()>,
+                            lit.matched() + 1 + lit2.matched()
+                        );
+                    }
+                }
+                else {
+                    return success(ch<lit.value()>, lit.matched());
+                }
+            }
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto literal(Src src) noexcept {
+        constexpr auto lc = literal_ch<Idx>(src);
+        if constexpr (is_failure(lc)) {
+            return failure();
+        }
+        else {
+            return success(ch<lc.value()>, lc.matched());
+        }
+    }
+
+    template <std::size_t Idx, typename Src>
+    [[nodiscard]] static constexpr auto literal_ch(Src src) noexcept {
+        constexpr char curr = char_at<Idx>(src);
+        if constexpr (curr == '\\') {
+            // Escaped
+            constexpr char nxt = char_at<Idx + 1>(src);
+            static_assert(is_special(nxt));
+            return success(nxt, 2);
+        }
+        else if constexpr (is_special(curr)) {
+            // Special characters
+            return failure();
+        }
+        else {
+            // Literal match
+            return success(curr, 1);
+        }
+    }
+};
+
+} /* namespace regex */
+} /* namespace detail */
+
+/**
+ * A way to define compile-time strings.
+ */
+#define cppcmb_str(str) ([]() -> std::string_view { return str; })
+
+template <typename Str>
+[[nodiscard]] constexpr auto regex(Str str) noexcept {
+    constexpr auto res = detail::regex::parser::top<0>(str);
+    static_assert(
+        !detail::regex::parser::is_failure(res),
+        "Invalid regular-expression!"
+    );
+    return res.value();
+}
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename Tag>
+class token {
+private:
+    std::string_view m_Content;
+    Tag              m_Type;
+
+public:
+    constexpr token(std::string_view cont, Tag ty) noexcept
+        : m_Content(cont), m_Type(ty) {
+    }
+
+    [[nodiscard]] constexpr auto const& content() const noexcept {
+        return m_Content;
+    }
+
+    [[nodiscard]] constexpr auto const& type() const noexcept {
+        return m_Type;
+    }
+};
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+/**
+ * Signal that we want to skip these characters instead of making a token out of
+ * them.
+ */
+struct skip_t {};
+
+inline constexpr auto skip = skip_t();
+
+namespace detail {
+
+// XXX(LPeter1997): This implementation blocks incremental features
+template <typename P, typename Tag>
+class token_parser : public combinator<token_parser<P, Tag>> {
+private:
+    P m_Parser;
+    Tag m_Tag;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename PFwd>
+    constexpr token_parser(PFwd&& p, Tag t)
+        : m_Parser(cppcmb_fwd(p)), m_Tag(t) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<maybe<token<Tag>>> {
+
+        using maybe_t = maybe<token<Tag>>;
+        using result_t = result<maybe_t>;
+
+        auto t = m_Parser.apply(r);
+        if (t.is_success()) {
+            std::string_view src = r.source();
+            std::size_t len = t.success().matched();
+            auto tok = token(src.substr(r.cursor(), len), m_Tag);
+
+            return result_t(
+                success(maybe_t(some(std::move(tok))), len),
+                t.furthest()
+            );
+        }
+        else {
+            return result_t(std::move(t).failure(), t.furthest());
+        }
+    }
+};
+
+template <typename P, typename Tag>
+class skip_token_parser : public combinator<skip_token_parser<P, Tag>> {
+private:
+    P m_Parser;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename PFwd>
+    constexpr skip_token_parser(PFwd&& p)
+        : m_Parser(cppcmb_fwd(p)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<maybe<token<Tag>>> {
+
+        using maybe_t = maybe<token<Tag>>;
+        using result_t = result<maybe_t>;
+
+        auto t = m_Parser.apply(r);
+        if (t.is_success()) {
+            return result_t(
+                success(maybe_t(none()), t.success().matched()),
+                t.furthest()
+            );
+        }
+        else {
+            return result_t(std::move(t).failure(), t.furthest());
+        }
+    }
+};
+
+// XXX(LPeter1997): Noexcept specifier
+template <typename Tag, typename Src, typename TTag>
+[[nodiscard]] constexpr auto str_to_token_parser(Src src, TTag t) {
+    auto p = ::cppcmb::regex(src);
+    using parser_type = decltype(p);
+    if constexpr (std::is_same_v<TTag, skip_t>) {
+        // We want to skip this
+        return skip_token_parser<parser_type, Tag>(std::move(p));
+    }
+    else {
+        // Keep it
+        static_assert(std::is_same_v<Tag, TTag>);
+        return token_parser<parser_type, Tag>(std::move(p), t);
+    }
+}
+
+/**
+ * Trait to find the first not skip-type in the type-list.
+ */
+template <typename...>
+struct first_not_skip;
+
+// If there is none, we signal failure with defining skip_t
+template <>
+struct first_not_skip<> {
+    using type = skip_t;
+};
+
+template <typename Head, typename... Tail>
+struct first_not_skip<Head, Tail...> {
+    using type = std::conditional_t<
+        std::is_same_v<Head, skip_t>,
+        typename first_not_skip<Tail...>::type,
+        Head
+    >;
+};
+
+template <typename... Ts>
+using first_not_skip_t = typename first_not_skip<Ts...>::type;
+
+// XXX(LPeter1997): Noexcept specifier
+template <typename... Rs>
+[[nodiscard]] constexpr auto make_lexer_parser(Rs&&... rules) {
+    using token_type = first_not_skip_t<
+        typename remove_cvref_t<Rs>::tag_type...
+    >;
+    // XXX(LPeter1997): Or we could just allow it
+    static_assert(
+        !std::is_same_v<token_type, skip_t>,
+        "There must be at least one token rule that doesn't skip!"
+    );
+    return (... | str_to_token_parser<token_type>(
+        cppcmb_fwd(rules).source(),
+        cppcmb_fwd(rules).tag()
+    ));
+}
+
+} /* namespace detail */
+
+template <typename Src, typename Tag>
+class token_rule {
+private:
+    Src m_Src;
+    Tag m_Tag;
+
+public:
+    using tag_type = Tag;
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_rule(Src src, Tag t)
+        : m_Src(src), m_Tag(t) {
+    }
+
+    // XXX(LPeter1997): Possibly don't need
+    cppcmb_getter(source, m_Src)
+    cppcmb_getter(tag, m_Tag)
+};
+
+template <typename Src, typename MainRule>
+class lexer {
+private:
+    reader<Src> m_Reader;
+    MainRule m_Rule;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename... Rs>
+    constexpr lexer(Src const& src, Rs&&... rules)
+        : m_Reader(src),
+        m_Rule(detail::make_lexer_parser(cppcmb_fwd(rules)...)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr auto next() {
+        using token_t = detail::remove_cvref_t<
+            decltype(m_Rule.apply(m_Reader).success().value().some().value())
+        >;
+        using result_t = result<token_t>;
+
+        while (true) {
+            if (is_end()) {
+                return result_t(failure(), 0);
+            }
+            auto t = m_Rule.apply(m_Reader);
+            if (t.is_success()) {
+                auto succ = std::move(t).success();
+
+                m_Reader.seek(m_Reader.cursor() + succ.matched());
+
+                if (succ.value().is_some()) {
+                    return result_t(
+                        success(
+                            std::move(succ).value().some().value(),
+                            succ.matched()
+                        ),
+                        t.furthest()
+                    );
+                }
+                else {
+                    continue;
+                }
+            }
+            else {
+                return result_t(failure(), t.furthest());
+            }
+        }
+    }
+
+    [[nodiscard]] constexpr auto is_end() const
+        cppcmb_return(m_Reader.is_end())
+};
+
+template <typename Src, typename... Rs>
+lexer(Src, Rs&&...)
+    -> lexer<Src, decltype(detail::make_lexer_parser(std::declval<Rs&&>()...))>;
 
 } /* namespace cppcmb */
 
@@ -1331,91 +2421,6 @@ parser(PFwd) -> parser<PFwd>;
 
 namespace cppcmb {
 
-/**
- * Success "type-constructor". The type that the parser returns when it
- * succeeded.
- */
-template <typename T>
-class success {
-public:
-    using value_type = T;
-
-private:
-    value_type  m_Value;
-    std::size_t m_Matched;
-
-public:
-    template <typename TFwd>
-    constexpr success(TFwd&& val, std::size_t matched)
-        noexcept(std::is_nothrow_constructible_v<value_type, TFwd&&>)
-        : m_Value(cppcmb_fwd(val)), m_Matched(matched) {
-    }
-
-    cppcmb_getter(value, m_Value)
-
-    [[nodiscard]] constexpr auto const& matched() const noexcept {
-        return m_Matched;
-    }
-};
-
-template <typename TFwd>
-success(TFwd, std::size_t) -> success<TFwd>;
-
-/**
- * Failure "type-constructor". The type that the parser returns when it fails.
- */
-class failure { };
-
-/**
- * The result type of a parser. It's either a success or a failure type.
- */
-template <typename T>
-class result {
-public:
-    using success_type = ::cppcmb::success<T>;
-    using failure_type = ::cppcmb::failure;
-
-private:
-    using either_type = std::variant<success_type, failure_type>;
-
-    /**
-     * The packrat parsers will have to fiddle with the furthest values.
-     */
-    template <typename>
-    friend class drec_packrat_t;
-    template <typename>
-    friend class irec_packrat_t;
-
-    either_type m_Data;
-    std::size_t m_Furthest;
-
-public:
-    template <typename TFwd>
-    constexpr result(TFwd&& val, std::size_t furthest)
-        noexcept(std::is_nothrow_constructible_v<either_type, TFwd&&>)
-        : m_Data(cppcmb_fwd(val)), m_Furthest(furthest) {
-    }
-
-    [[nodiscard]] constexpr bool is_success() const noexcept {
-        return std::holds_alternative<success_type>(m_Data);
-    }
-
-    [[nodiscard]] constexpr bool is_failure() const noexcept {
-        return std::holds_alternative<failure_type>(m_Data);
-    }
-
-    cppcmb_getter(success, std::get<success_type>(m_Data))
-    cppcmb_getter(failure, std::get<failure_type>(m_Data))
-
-    [[nodiscard]] constexpr auto const& furthest() const noexcept {
-        return m_Furthest;
-    }
-};
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
 namespace detail {
 
 /**
@@ -1548,118 +2553,6 @@ private:
 
 template <typename PFwd, typename FnFwd>
 action_t(PFwd, FnFwd) -> action_t<PFwd, FnFwd>;
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-/**
- * A tag-type for a more uniform alternative syntax.
- * This can be put as the first element of an alternative chain so every new
- * line can start with the alternative operator. It's completely ignored.
- * Example:
- * auto parser = pass
- *             | first
- *             | second
- *             ;
- */
-struct pass_t {};
-
-inline constexpr auto pass = pass_t();
-
-template <typename P1, typename P2>
-class alt_t : public combinator<alt_t<P1, P2>> {
-private:
-    template <typename Src>
-    using value_t = sum_values_t<
-        parser_value_t<P1, Src>,
-        parser_value_t<P2, Src>
-    >;
-
-    P1 m_First;
-    P2 m_Second;
-
-public:
-    template <typename P1Fwd, typename P2Fwd>
-    constexpr alt_t(P1Fwd&& p1, P2Fwd&& p2)
-        noexcept(
-            std::is_nothrow_constructible_v<P1, P1Fwd&&>
-         && std::is_nothrow_constructible_v<P2, P2Fwd&&>
-        )
-        : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
-    }
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<value_t<Src>> {
-        cppcmb_assert_parser(P1, Src);
-        cppcmb_assert_parser(P2, Src);
-
-        using result_t = result<value_t<Src>>;
-
-        // Try to apply the first alternative
-        auto p1_inv = m_First.apply(r);
-        if (p1_inv.is_success()) {
-            auto p1_succ = std::move(p1_inv).success();
-            return result_t(
-                success(
-                    sum_values<value_t<Src>>(std::move(p1_succ).value()),
-                    p1_succ.matched()
-                ),
-                p1_inv.furthest()
-            );
-        }
-
-        // Try to apply the second alternative
-        auto p2_inv = m_Second.apply(r);
-        if (p2_inv.is_success()) {
-            auto p2_succ = std::move(p2_inv).success();
-            return result_t(
-                success(
-                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
-                    p2_succ.matched()
-                ),
-                std::max(p1_inv.furthest(), p2_inv.furthest())
-            );
-        }
-
-        // Both failed, return the error which got further
-        auto p1_err = std::move(p1_inv).failure();
-        auto p2_err = std::move(p2_inv).failure();
-
-        if (p1_inv.furthest() > p2_inv.furthest()) {
-            return result_t(std::move(p1_err), p1_inv.furthest());
-        }
-        else if (p1_inv.furthest() < p2_inv.furthest()) {
-            return result_t(std::move(p2_err), p2_inv.furthest());
-        }
-        else {
-            // They got to the same distance, need to merge errors
-            // XXX(LPeter1997): Implement, for now we just return the first
-            return result_t(std::move(p1_err), p1_inv.furthest());
-        }
-    }
-};
-
-template <typename P1Fwd, typename P2Fwd>
-alt_t(P1Fwd, P2Fwd) -> alt_t<P1Fwd, P2Fwd>;
-
-/**
- * Operator for making alternatives.
- */
-template <typename P1, typename P2,
-    cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
-[[nodiscard]] constexpr auto operator|(P1&& p1, P2&& p2)
-    cppcmb_return(alt_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
-
-/**
- * Ignore pass.
- */
-template <typename P2,
-    cppcmb_requires_t(detail::is_combinator_cvref_v<P2>)>
-[[nodiscard]] constexpr auto operator|(pass_t, P2&& p2)
-    cppcmb_return(cppcmb_fwd(p2))
 
 } /* namespace cppcmb */
 
@@ -2373,227 +3266,6 @@ constexpr auto operator%=(P&& parser, as_memo_i_t)
 
 } /* namespace cppcmb */
 
-// XXX(LPeter1997): We could check the collection for push_back (better errors)
-
-namespace cppcmb {
-
-/**
- * A type-pack that describes a collection except it's type.
- * Used for the many and many1 combinators.
- */
-template <
-    template <typename...> typename Coll,
-    template <typename> typename... Ts
->
-struct collect_to_t {
-    template <typename T>
-    using type = Coll<T, Ts<T>...>;
-};
-
-template <
-    template <typename...> typename Coll,
-    template <typename> typename... Ts
->
-inline constexpr auto collect_to = collect_to_t<Coll, Ts...>();
-
-namespace detail {
-
-/**
- * Tag-type for many and many1.
- */
-struct many_tag {};
-
-/**
- * SFINAE for many types.
- */
-template <typename T>
-inline constexpr bool is_many_v = std::is_base_of_v<many_tag, T>;
-
-} /* namespace detail */
-
-template <typename P, typename To = collect_to_t<std::vector>>
-class many_t : public combinator<many_t<P>>,
-               private detail::many_tag {
-private:
-    cppcmb_self_check(many_t);
-
-    template <typename Src>
-    using value_t = typename To::template type<parser_value_t<P, Src>>;
-
-    P m_Parser;
-
-public:
-    template <typename PFwd, cppcmb_requires_t(!is_self_v<PFwd>)>
-    constexpr many_t(PFwd&& p)
-        noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
-        : m_Parser(cppcmb_fwd(p)) {
-    }
-
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) &
-        cppcmb_return(many_t<P, To2>(m_Parser))
-
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) const&
-        cppcmb_return(many_t<P, To2>(m_Parser))
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) &&
-        cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) const&&
-        cppcmb_return(many_t<P, To2>(std::move(m_Parser)))
-
-    cppcmb_getter(underlying, m_Parser)
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<value_t<Src>> {
-        cppcmb_assert_parser(P, Src);
-
-        using result_t = result<value_t<Src>>;
-
-        std::size_t furthest = 0U;
-        std::size_t matched = 0U;
-        auto coll = value_t<Src>();
-        auto rr = r;
-        while (true) {
-            auto p_inv = m_Parser.apply(rr);
-            furthest = std::max(furthest, matched + p_inv.furthest());
-            if (p_inv.is_failure()) {
-                // Stop applying
-                break;
-            }
-            auto p_succ = std::move(p_inv).success();
-            matched += p_succ.matched();
-            // Add to collection
-            coll.push_back(std::move(p_succ).value());
-            // Move reader
-            rr.seek(rr.cursor() + p_succ.matched());
-        }
-        return result_t(success(std::move(coll), matched), furthest);
-    }
-};
-
-template <typename PFwd>
-many_t(PFwd) -> many_t<PFwd>;
-
-/**
- * Operator for making many parser.
- */
-template <typename P, cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-[[nodiscard]] constexpr auto operator*(P&& p)
-    cppcmb_return(many_t(cppcmb_fwd(p)))
-
-/**
- * Operator to collect 'many' and 'many1' to a different container.
- */
-template <typename P, typename To,
-    cppcmb_requires_t(detail::is_many_v<detail::remove_cvref_t<P>>)>
-[[nodiscard]] constexpr auto operator>>(P&& p, To to)
-    cppcmb_return(cppcmb_fwd(p).collect_to(to))
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-template <typename P, typename To = collect_to_t<std::vector>>
-class many1_t : public combinator<many1_t<P>>,
-                private detail::many_tag {
-private:
-    cppcmb_self_check(many1_t);
-
-    template <typename Src>
-    using value_t = parser_value_t<many_t<P, To>, Src>;
-
-    many_t<P, To> m_Parser;
-
-public:
-    template <typename PFwd, cppcmb_requires_t(!is_self_v<PFwd>)>
-    constexpr many1_t(PFwd&& p)
-        noexcept(std::is_nothrow_constructible_v<P, PFwd&&>)
-        : m_Parser(many_t<P, To>(cppcmb_fwd(p))) {
-    }
-
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) &
-        cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) const&
-        cppcmb_return(many1_t<P, To2>(m_Parser.underlying()))
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) &&
-        cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
-    template <typename To2>
-    [[nodiscard]] constexpr auto collect_to(To2) const&&
-        cppcmb_return(many1_t<P, To2>(std::move(m_Parser).underlying()))
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<value_t<Src>> {
-        cppcmb_assert_parser(P, Src);
-
-        using result_t = result<value_t<Src>>;
-
-        auto p_inv = m_Parser.apply(r);
-
-        cppcmb_assert(
-            "The underlying 'many' parser must always succeed!",
-            p_inv.is_success()
-        );
-
-        auto p_succ = std::move(p_inv).success();
-        if (p_succ.value().size() > 0) {
-            // Succeed
-            return result_t(std::move(p_succ), p_inv.furthest());
-        }
-        else {
-            // Fail
-            return result_t(failure(), p_inv.furthest());
-        }
-    }
-};
-
-template <typename PFwd>
-many1_t(PFwd) -> many1_t<PFwd>;
-
-/**
- * Operator for making many1 parser.
- */
-template <typename P, cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
-[[nodiscard]] constexpr auto operator+(P&& p)
-    cppcmb_return(many1_t(cppcmb_fwd(p)))
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-class one_t : public combinator<one_t> {
-public:
-    // XXX(LPeter1997): Do we need typename here?
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<typename reader<Src>::value_type> {
-
-        using result_t = result<typename reader<Src>::value_type>;
-
-        if (r.is_end()) {
-            // Nothing to consume
-            return result_t(failure(), 0U);
-        }
-        else {
-            return result_t(success(r.current(), 1U), 1U);
-        }
-    }
-};
-
-// Value for 'one' parser
-inline constexpr one_t one = one_t();
-
-} /* namespace cppcmb */
-
 namespace cppcmb {
 
 template <typename P>
@@ -2650,493 +3322,6 @@ opt_t(PFwd) -> opt_t<PFwd>;
 template <typename P, cppcmb_requires_t(detail::is_combinator_cvref_v<P>)>
 [[nodiscard]] constexpr auto operator-(P&& p)
     cppcmb_return(opt_t(cppcmb_fwd(p)))
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-template <typename P1, typename P2>
-class seq_t : public combinator<seq_t<P1, P2>> {
-private:
-    template <typename Src>
-    using value_t = decltype(product_values(
-        std::declval<parser_value_t<P1, Src>>(),
-        std::declval<parser_value_t<P2, Src>>()
-    ));
-
-    P1 m_First;
-    P2 m_Second;
-
-public:
-    template <typename P1Fwd, typename P2Fwd>
-    constexpr seq_t(P1Fwd&& p1, P2Fwd&& p2)
-        noexcept(
-            std::is_nothrow_constructible_v<P1, P1Fwd&&>
-         && std::is_nothrow_constructible_v<P2, P2Fwd&&>
-        )
-        : m_First(cppcmb_fwd(p1)), m_Second(cppcmb_fwd(p2)) {
-    }
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<value_t<Src>> {
-        cppcmb_assert_parser(P1, Src);
-        cppcmb_assert_parser(P2, Src);
-
-        using result_t = result<value_t<Src>>;
-
-        auto p1_inv = m_First.apply(r);
-        if (p1_inv.is_failure()) {
-            // Early failure, don't continue
-            return result_t(std::move(p1_inv).failure(), p1_inv.furthest());
-        }
-        // Get the success alternative
-        auto p1_succ = std::move(p1_inv).success();
-        // Create the next reader
-        auto r2 = reader(
-            r.source(), r.cursor() + p1_succ.matched(), r.context_ptr()
-        );
-        // Invoke the second parser
-        auto p2_inv = m_Second.apply(r2);
-        // Max peek distance
-        auto max_furthest = std::max(
-            p1_inv.furthest(),
-            p1_succ.matched() + p2_inv.furthest()
-        );
-        if (p2_inv.is_failure()) {
-            // Second failed, fail on that error
-            return result_t(
-                std::move(p2_inv).failure(),
-                max_furthest
-            );
-        }
-        // Get the success alternative
-        auto p2_succ = std::move(p2_inv).success();
-        // Combine the values
-        return result_t(
-            success(
-                product_values(
-                    std::move(p1_succ).value(),
-                    std::move(p2_succ).value()
-                ),
-                p1_succ.matched() + p2_succ.matched()
-            ),
-            max_furthest
-        );
-    }
-};
-
-template <typename P1Fwd, typename P2Fwd>
-seq_t(P1Fwd, P2Fwd) -> seq_t<P1Fwd, P2Fwd>;
-
-/**
- * Operator for making a sequence.
- */
-template <typename P1, typename P2,
-    cppcmb_requires_t(detail::all_combinators_cvref_v<P1, P2>)>
-[[nodiscard]] constexpr auto operator&(P1&& p1, P2&& p2)
-    cppcmb_return(seq_t(cppcmb_fwd(p1), cppcmb_fwd(p2)))
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-template <typename Pred>
-class filter {
-private:
-    cppcmb_self_check(filter);
-
-    template <typename... Ts>
-    using value_t = decltype(product_values(
-        std::declval<Ts>()...
-    ));
-
-    Pred m_Predicate;
-
-public:
-    template <typename PredFwd, cppcmb_requires_t(!is_self_v<PredFwd>)>
-    constexpr filter(PredFwd&& pred)
-        noexcept(std::is_nothrow_constructible_v<Pred, PredFwd&&>)
-        : m_Predicate(cppcmb_fwd(pred)) {
-    }
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename... Ts>
-    [[nodiscard]] constexpr auto operator()(Ts&&... args) const
-        -> maybe<value_t<Ts&&...>> {
-        static_assert(
-            std::is_invocable_v<Pred, Ts&&...>,
-            "The predicate must be invocable with the parser value!"
-        );
-        using result_t = std::invoke_result_t<Pred, Ts&&...>;
-        static_assert(
-            std::is_convertible_v<result_t, bool>,
-            "The predicate must return a type that is convertible to bool!"
-        );
-
-        if (m_Predicate(args...)) {
-            return some(product_values(cppcmb_fwd(args)...));
-        }
-        else {
-            return none();
-        }
-    }
-};
-
-template <typename PredFwd>
-filter(PredFwd) -> filter<PredFwd>;
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-template <std::size_t... Ns>
-class select_t {
-public:
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename... Ts>
-    [[nodiscard]] constexpr decltype(auto) operator()(Ts&&... args) const {
-        return product_values(
-            std::get<Ns>(std::tuple(cppcmb_fwd(args)...))...
-        );
-    }
-};
-
-template <std::size_t... Ns>
-inline constexpr auto select = select_t<Ns...>();
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-namespace detail {
-namespace regex {
-
-/**
- * <top>           ::= <term> '|' <top>
- *                   | <term>
- *                   ;
- *
- * <term>          ::= <factor> <term>
- *                   | <factor>
- *                   ;
- *
- * <factor>        ::= <atom> '*'
- *                   | <atom> '+'
- *                   | <atom> '?'
- *                   | <atom>
- *                   ;
- *
- * <atom>          ::= '(' <top> ')'
- *                   | '[' <char_grouping> ']'
- *                   | <literal>
- *                   ;
- *
- * <char_grouping> ::= <group_element> <char_grouping>
- *                   | <group_element>
- *                   ;
- *
- * <group_element> ::= '\' '-'
- *                   | <literal> '-' <literal>
- *                   | <literal>
- *                   ;
- *
- * <literal>       ::= CHAR
- *                   | '\' SPECIAL_CHAR
- *                   ;
- */
-
-template <char Ch>
-constexpr bool is_char(char c) { return c == Ch; }
-
-template <char Ch>
-inline constexpr auto ch = one[filter(is_char<Ch>)][select<>];
-
-template <char Ch1, char Ch2>
-constexpr bool is_range(char c) {
-    static_assert(Ch1 <= Ch2);
-    return c >= Ch1 && c <= Ch2;
-}
-
-template <char Ch1, char Ch2>
-inline constexpr auto range = one[filter(is_range<Ch1, Ch2>)][select<>];
-
-// XXX(LPeter1997): We publish something like this in the API
-/**
- * A dummy collection interface.
- */
-template <typename>
-class drop_collection {
-private:
-    std::size_t cnt = 0;
-
-public:
-    template <typename TFwd>
-    constexpr void push_back(TFwd&&) noexcept {
-        ++cnt;
-    }
-
-    [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
-};
-
-struct parser {
-    template <typename T>
-    [[nodiscard]] static constexpr auto star(T p) noexcept {
-        return action_t((*p >> collect_to<drop_collection>), select<>);
-    }
-
-    template <typename T>
-    [[nodiscard]] static constexpr auto plus(T p) noexcept {
-        return action_t((+p >> collect_to<drop_collection>), select<>);
-    }
-
-    template <typename T>
-    [[nodiscard]] static constexpr auto qmark(T p) noexcept {
-        return action_t(-p, select<>);
-    }
-
-    template <typename T>
-    static constexpr bool is_failure(T) {
-        return std::is_same_v<remove_cvref_t<T>, failure>;
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr char char_at(Src src) noexcept {
-        return src()[Idx];
-    }
-
-    [[nodiscard]] static constexpr bool is_special(char ch) noexcept {
-        return ch == '(' || ch == ')'
-            || ch == '[' || ch == ']'
-            || ch == '*' || ch == '+'
-            || ch == '|' || ch == '?'
-            || ch == '\\'
-            ;
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto top(Src src) noexcept {
-        constexpr auto lhs = term<Idx>(src);
-        static_assert(!is_failure(lhs));
-        constexpr std::size_t NextIdx = Idx + lhs.matched();
-        if constexpr (char_at<NextIdx>(src) == '|') {
-            constexpr auto rhs = top<NextIdx + 1>(src);
-            static_assert(!is_failure(rhs));
-            return success(
-                lhs.value() | rhs.value(),
-                lhs.matched() + 1 + rhs.matched()
-            );
-        }
-        else {
-            return lhs;
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto term(Src src) noexcept {
-        constexpr auto lhs = factor<Idx>(src);
-        static_assert(!is_failure(lhs));
-        constexpr std::size_t NextIdx = Idx + lhs.matched();
-        return term_impl<NextIdx>(lhs, src);
-    }
-
-    template <std::size_t Idx, typename Res, typename Src>
-    [[nodiscard]] static constexpr auto term_impl(Res res, Src src) noexcept {
-        if constexpr (src().size() <= Idx) {
-            return res;
-        }
-        else {
-            constexpr auto lhs = factor<Idx>(src);
-            if constexpr (is_failure(lhs)) {
-                return res;
-            }
-            else {
-                constexpr std::size_t NextIdx = Idx + lhs.matched();
-                return term_impl<NextIdx>(
-                    success(
-                        res.value() & lhs.value(),
-                        res.matched() + lhs.matched()
-                    ),
-                    src
-                );
-            }
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto factor(Src src) noexcept {
-        constexpr auto lhs = atom<Idx>(src);
-        if constexpr (is_failure(lhs)) {
-            return failure();
-        }
-        else {
-            constexpr std::size_t NextIdx = Idx + lhs.matched();
-            constexpr char curr = char_at<NextIdx>(src);
-            if constexpr (curr == '*') {
-                return success(star(lhs.value()), lhs.matched() + 1);
-            }
-            else if constexpr (curr == '+') {
-                return success(plus(lhs.value()), lhs.matched() + 1);
-            }
-            else if constexpr (curr == '?') {
-                return success(qmark(lhs.value()), lhs.matched() + 1);
-            }
-            else {
-                return lhs;
-            }
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto atom(Src src) noexcept {
-        if constexpr (Idx < src().size()) {
-            constexpr char curr = char_at<Idx>(src);
-            if constexpr (curr == '(') {
-                // Grouping
-                constexpr auto sub = top<Idx + 1>(src);
-                static_assert(!is_failure(sub));
-                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
-                static_assert(char_at<NextIdx>(src) == ')');
-                return success(sub.value(), sub.matched() + 2);
-            }
-            else if constexpr (curr == '[') {
-                // Character classes
-                constexpr auto sub = char_grouping<Idx + 1>(src);
-                static_assert(!is_failure(sub));
-                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
-                static_assert(char_at<NextIdx>(src) == ']');
-                return success(sub.value(), sub.matched() + 2);
-            }
-            else {
-                return literal<Idx>(src);
-            }
-        }
-        else {
-            failure();
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto char_grouping(Src src) noexcept {
-        constexpr auto lhs = group_element<Idx>(src);
-        static_assert(!is_failure(lhs));
-        return char_grouping_impl<Idx + lhs.matched()>(lhs, src);
-    }
-
-    template <std::size_t Idx, typename Res, typename Src>
-    [[nodiscard]]
-    static constexpr auto char_grouping_impl(Res res, Src src) noexcept {
-        constexpr auto lhs = group_element<Idx>(src);
-        if constexpr (is_failure(lhs)) {
-            return res;
-        }
-        else {
-            return char_grouping_impl<Idx + lhs.matched()>(
-                success(
-                    res.value() | lhs.value(),
-                    res.matched() + lhs.matched()
-                ),
-                src
-            );
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto group_element(Src src) noexcept {
-        if constexpr (char_at<Idx>(src) == '\\'
-                   && char_at<Idx + 1>(src) == '-') {
-            return success(ch<'-'>, 2);
-        }
-        else {
-            constexpr auto lit = literal_ch<Idx>(src);
-            if constexpr (is_failure(lit)) {
-                return failure();
-            }
-            else {
-                constexpr std::size_t NextIdx = Idx + lit.matched();
-                if constexpr (char_at<NextIdx>(src) == '-') {
-                    constexpr auto lit2 = literal_ch<NextIdx + 1>(src);
-                    if constexpr (is_failure(lit2)) {
-                        // No right-hand-side, only consumed lit
-                        return success(ch<lit.value()>, lit.matched());
-                    }
-                    else {
-                        // Char range
-                        return success(
-                            range<lit.value(), lit2.value()>,
-                            lit.matched() + 1 + lit2.matched()
-                        );
-                    }
-                }
-                else {
-                    return success(ch<lit.value()>, lit.matched());
-                }
-            }
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto literal(Src src) noexcept {
-        constexpr auto lc = literal_ch<Idx>(src);
-        if constexpr (is_failure(lc)) {
-            return failure();
-        }
-        else {
-            return success(ch<lc.value()>, lc.matched());
-        }
-    }
-
-    template <std::size_t Idx, typename Src>
-    [[nodiscard]] static constexpr auto literal_ch(Src src) noexcept {
-        constexpr char curr = char_at<Idx>(src);
-        if constexpr (curr == '\\') {
-            // Escaped
-            constexpr char nxt = char_at<Idx + 1>(src);
-            static_assert(is_special(nxt));
-            return success(nxt, 2);
-        }
-        else if constexpr (is_special(curr)) {
-            // Special characters
-            return failure();
-        }
-        else {
-            // Literal match
-            return success(curr, 1);
-        }
-    }
-};
-
-class str_const {
-    const char * const p_;
-    const std::size_t sz_;
-public:
-    template <std::size_t N>
-    constexpr str_const( const char( & a )[ N ] )
-    : p_( a ), sz_( N - 1 ) {}
-    constexpr char operator[]( std::size_t n ) const {
-        return p_[ n ];
-    }
-    constexpr std::size_t size() const { return sz_; }
-};
-
-} /* namespace regex */
-} /* namespace detail */
-
-/**
- * A way to define compile-time strings.
- */
-#define cppcmb_str(str) ([]() -> std::string_view { return str; })
-
-[[nodiscard]] constexpr auto regex(detail::regex::str_const str) noexcept {
-    auto s = [&] { return str; };
-    constexpr auto res = detail::regex::parser::top<0>(s);
-    static_assert(
-        !detail::regex::parser::is_failure(res),
-        "Invalid regular-expression!"
-    );
-    return res.value();
-}
 
 } /* namespace cppcmb */
 
