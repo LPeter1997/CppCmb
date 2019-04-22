@@ -87,6 +87,14 @@ struct parser {
         return src()[Idx];
     }
 
+    [[nodiscard]] static constexpr bool is_special(char ch) noexcept {
+        return ch == '('
+            || ch == ')'
+            || ch == '*'
+            || ch == '|'
+            ;
+    }
+
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto top(Src src) noexcept {
         constexpr auto lhs = term<Idx>(src);
@@ -169,12 +177,13 @@ struct parser {
                 static_assert(char_at<NextIdx>(src) == ')');
                 return success(sub.value(), sub.matched() + 2);
             }
-            else if constexpr (curr == ')') {
-                // Special char
-                return failure();
+            else if constexpr (curr == '\\') {
+                constexpr char nxt = char_at<Idx + 1>(src);
+                static_assert(is_special(nxt));
+                return success(ch<nxt>, 2);
             }
-            else if constexpr (curr == '|') {
-                // Special char
+            else if constexpr (is_special(curr)) {
+                // Special characters
                 return failure();
             }
             else {
