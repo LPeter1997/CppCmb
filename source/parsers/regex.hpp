@@ -71,12 +71,17 @@ public:
     [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
 };
 
-template <typename T>
-[[nodiscard]] constexpr auto star(T p) noexcept {
-    return action_t((*p >> collect_to<drop_collection>), select<>);
-}
-
 struct parser {
+    template <typename T>
+    [[nodiscard]] static constexpr auto star(T p) noexcept {
+        return action_t((*p >> collect_to<drop_collection>), select<>);
+    }
+
+    template <typename T>
+    [[nodiscard]] static constexpr auto plus(T p) noexcept {
+        return action_t((+p >> collect_to<drop_collection>), select<>);
+    }
+
     template <typename T>
     static constexpr bool is_failure(T) {
         return std::is_same_v<remove_cvref_t<T>, failure>;
@@ -90,8 +95,9 @@ struct parser {
     [[nodiscard]] static constexpr bool is_special(char ch) noexcept {
         return ch == '('
             || ch == ')'
-            || ch == '*'
             || ch == '|'
+            || ch == '*'
+            || ch == '+'
             ;
     }
 
@@ -152,12 +158,12 @@ struct parser {
         }
         else {
             constexpr std::size_t NextIdx = Idx + lhs.matched();
-            if constexpr (char_at<NextIdx>(src) == '*') {
-                constexpr auto res = star(lhs.value());
-                return success(
-                    res,
-                    lhs.matched() + 1
-                );
+            constexpr char curr = char_at<NextIdx>(src);
+            if constexpr (curr == '*') {
+                return success(star(lhs.value()), lhs.matched() + 1);
+            }
+            else if constexpr (curr == '+') {
+                return success(plus(lhs.value()), lhs.matched() + 1);
             }
             else {
                 return lhs;
