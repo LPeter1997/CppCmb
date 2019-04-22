@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-22 08:46:23.532657
+ * Generation date: 2019-04-22 08:55:22.468936
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -2895,30 +2895,26 @@ struct parser {
 
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto atom(Src src) noexcept {
-        if constexpr (char_at<Idx>(src) == '(') {
-            // Grouping
-            constexpr auto sub = top<Idx + 1>(src);
-            static_assert(!is_failure(sub));
-            constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
-            static_assert(char_at<NextIdx>(src) == ')');
-            return success(
-                sub.value(),
-                sub.matched() + 2
-            );
-        }
-        else if constexpr (Idx < src().size()) {
-            // Single character
-            if constexpr (char_at<Idx>(src) == ')') {
+        if constexpr (Idx < src().size()) {
+            constexpr char curr = char_at<Idx>(src);
+            if constexpr (curr == '(') {
+                // Grouping
+                constexpr auto sub = top<Idx + 1>(src);
+                static_assert(!is_failure(sub));
+                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
+                static_assert(char_at<NextIdx>(src) == ')');
+                return success(sub.value(), sub.matched() + 2);
+            }
+            else if constexpr (curr == ')') {
+                // Special char
                 return failure();
             }
-            else if constexpr (char_at<Idx>(src) == '|') {
+            else if constexpr (curr == '|') {
+                // Special char
                 return failure();
             }
             else {
-                return success(
-                    ch<char_at<Idx>(src)>,
-                    1
-                );
+                return success(ch<curr>, 1);
             }
         }
         else {
