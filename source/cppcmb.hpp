@@ -12,6 +12,7 @@
 
 #include "apply_value.hpp"
 #include "detail.hpp"
+#include "lexer.hpp"
 #include "maybe.hpp"
 #include "memo_context.hpp"
 #include "parser.hpp"
@@ -20,6 +21,7 @@
 #include "reader.hpp"
 #include "result.hpp"
 #include "sum.hpp"
+#include "token.hpp"
 #include "transformations.hpp"
 
 #endif /* CPPCMB_CPPCMB_HPP */

@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-22 10:04:53.793698
+ * Generation date: 2019-04-22 11:59:24.744444
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -601,80 +601,6 @@ template <typename Fn, typename T>
 
 namespace cppcmb {
 
-/**
- * Some type-constructor for maybe.
- */
-template <typename T>
-class some {
-public:
-    using value_type = T;
-
-private:
-    cppcmb_self_check(some);
-
-    T m_Value;
-
-public:
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
-    constexpr some(TFwd&& val)
-        : m_Value(cppcmb_fwd(val)) {
-    }
-
-    cppcmb_getter(value, m_Value)
-};
-
-template <typename TFwd>
-some(TFwd) -> some<TFwd>;
-
-/**
- * None type-constructor for maybe.
- */
-class none {};
-
-/**
- * Generic maybe-type.
- */
-template <typename T>
-class maybe {
-public:
-    using some_type = ::cppcmb::some<T>;
-    using none_type = ::cppcmb::none;
-
-private:
-    cppcmb_self_check(maybe);
-
-    std::variant<some_type, none_type> m_Data;
-
-public:
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
-    constexpr maybe(TFwd&& val)
-        : m_Data(cppcmb_fwd(val)) {
-    }
-
-    [[nodiscard]] constexpr bool is_some() const noexcept {
-        return std::holds_alternative<some_type>(m_Data);
-    }
-
-    [[nodiscard]] constexpr bool is_none() const noexcept {
-        return std::holds_alternative<none_type>(m_Data);
-    }
-
-    cppcmb_getter(some, std::get<some_type>(m_Data))
-    cppcmb_getter(none, std::get<none_type>(m_Data))
-};
-
-namespace detail {
-
-cppcmb_is_specialization(maybe);
-
-} /* namespace detail */
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
 namespace detail {
 
 /**
@@ -782,6 +708,258 @@ public:
         return *context_ptr();
     }
 };
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+namespace detail {
+
+/**
+ * A tag-type for every combinator, so it's easier to check inheritance.
+ */
+class combinator_base {};
+
+} /* namespace detail */
+
+/**
+ * Check if a type correctly derives from the combinator base.
+ * The user actually has to derive from combinator<Self>, but that already
+ * derives from combinator base, so this check is sufficient.
+ */
+template <typename T>
+using is_combinator = std::is_base_of<detail::combinator_base, T>;
+
+template <typename T>
+inline constexpr bool is_combinator_v = is_combinator<T>::value;
+
+namespace detail {
+
+/**
+ * Helpers, mainly for operators.
+ */
+
+template <typename T>
+inline constexpr bool is_combinator_cvref_v =
+    is_combinator_v<remove_cvref_t<T>>;
+
+template <typename... Ts>
+inline constexpr bool all_combinators_cvref_v =
+    (... & is_combinator_cvref_v<Ts>);
+
+} /* namespace detail */
+
+// Forward-declare the action combinator, the base combinator has to see it
+template <typename Cmb, typename Fn>
+class action_t;
+
+#define cppcmb_noexcept_subscript(...) \
+noexcept(noexcept(action_t(std::declval<__VA_ARGS__>(), cppcmb_fwd(fn))))
+
+/**
+ * The actual type that all other combinators have to derive from.
+ */
+template <typename Self>
+class combinator : public detail::crtp<Self>,
+                   private detail::combinator_base {
+public:
+    template <typename Fn>
+    [[nodiscard]] constexpr auto operator[](Fn&& fn) &
+        cppcmb_noexcept_subscript(Self&) {
+
+        return action_t(this->self(), cppcmb_fwd(fn));
+    }
+
+    template <typename Fn>
+    [[nodiscard]] constexpr auto operator[](Fn&& fn) const&
+        cppcmb_noexcept_subscript(Self const&) {
+
+        return action_t(this->self(), cppcmb_fwd(fn));
+    }
+
+    template <typename Fn>
+    [[nodiscard]] constexpr auto operator[](Fn&& fn) &&
+        cppcmb_noexcept_subscript(Self&&) {
+
+        return action_t(std::move(this->self()), cppcmb_fwd(fn));
+    }
+
+    template <typename Fn>
+    [[nodiscard]] constexpr auto operator[](Fn&& fn) const&&
+        cppcmb_noexcept_subscript(Self const&&) {
+
+        return action_t(std::move(this->self()), cppcmb_fwd(fn));
+    }
+};
+
+#undef cppcmb_noexcept_subscript
+
+namespace detail {
+
+/**
+ * Concept check for parser interface.
+ */
+template <typename T, typename Src>
+using apply_t = decltype(
+    std::declval<T>().apply(std::declval<reader<Src> const&>())
+);
+
+template <typename T, typename Src>
+inline constexpr bool has_parser_interface_v =
+       is_detected_v<apply_t, T, Src>
+    && is_combinator_v<T>;
+
+} /* namespace detail */
+
+/**
+ * Every parser can use this at the beginning of the apply function to check
+ * sub-parsers.
+ */
+#define cppcmb_assert_parser(p, src)                  \
+static_assert(                                        \
+    ::cppcmb::detail::has_parser_interface_v<p, src>, \
+    "A parser must be derived from combinator<Self> " \
+    " and have a member function apply(reader<Src>)!" \
+    " (note: apply has to be const-qualified!)"       \
+)
+
+/**
+ * Helper to get the parser result.
+ */
+template <typename P, typename Src>
+using parser_result_t = detail::remove_cvref_t<decltype(
+    std::declval<P>().apply(std::declval<reader<Src> const&>())
+)>;
+
+/**
+ * Helper to get the result value of a parse success.
+ */
+template <typename P, typename Src>
+using parser_value_t = detail::remove_cvref_t<decltype(
+    std::declval<parser_result_t<P, Src>>().success().value()
+)>;
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+template <typename Tag>
+class token {
+private:
+    std::string_view m_Content;
+    Tag              m_Type;
+
+public:
+    constexpr token(std::string_view cont, Tag ty) noexcept
+        : m_Content(cont), m_Type(ty) {
+    }
+
+    [[nodiscard]] constexpr auto const& content() const noexcept {
+        return m_Content;
+    }
+
+    [[nodiscard]] constexpr auto const& type() const noexcept {
+        return m_Type;
+    }
+};
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+namespace detail {
+
+/*template <typename Tag>
+class token_parser : public combinator<token_parser</* TODO *//*>> {
+
+};*/
+
+} /* namespace detail */
+
+template <typename Src, typename Tag>
+class token_rule {
+private:
+
+};
+
+template <typename MainRule>
+class lexer {
+
+};
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+/**
+ * Some type-constructor for maybe.
+ */
+template <typename T>
+class some {
+public:
+    using value_type = T;
+
+private:
+    cppcmb_self_check(some);
+
+    T m_Value;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+    constexpr some(TFwd&& val)
+        : m_Value(cppcmb_fwd(val)) {
+    }
+
+    cppcmb_getter(value, m_Value)
+};
+
+template <typename TFwd>
+some(TFwd) -> some<TFwd>;
+
+/**
+ * None type-constructor for maybe.
+ */
+class none {};
+
+/**
+ * Generic maybe-type.
+ */
+template <typename T>
+class maybe {
+public:
+    using some_type = ::cppcmb::some<T>;
+    using none_type = ::cppcmb::none;
+
+private:
+    cppcmb_self_check(maybe);
+
+    std::variant<some_type, none_type> m_Data;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+    constexpr maybe(TFwd&& val)
+        : m_Data(cppcmb_fwd(val)) {
+    }
+
+    [[nodiscard]] constexpr bool is_some() const noexcept {
+        return std::holds_alternative<some_type>(m_Data);
+    }
+
+    [[nodiscard]] constexpr bool is_none() const noexcept {
+        return std::holds_alternative<none_type>(m_Data);
+    }
+
+    cppcmb_getter(some, std::get<some_type>(m_Data))
+    cppcmb_getter(none, std::get<none_type>(m_Data))
+};
+
+namespace detail {
+
+cppcmb_is_specialization(maybe);
+
+} /* namespace detail */
 
 } /* namespace cppcmb */
 
@@ -1148,136 +1326,6 @@ public:
 
 template <typename PFwd>
 parser(PFwd) -> parser<PFwd>;
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-namespace detail {
-
-/**
- * A tag-type for every combinator, so it's easier to check inheritance.
- */
-class combinator_base {};
-
-} /* namespace detail */
-
-/**
- * Check if a type correctly derives from the combinator base.
- * The user actually has to derive from combinator<Self>, but that already
- * derives from combinator base, so this check is sufficient.
- */
-template <typename T>
-using is_combinator = std::is_base_of<detail::combinator_base, T>;
-
-template <typename T>
-inline constexpr bool is_combinator_v = is_combinator<T>::value;
-
-namespace detail {
-
-/**
- * Helpers, mainly for operators.
- */
-
-template <typename T>
-inline constexpr bool is_combinator_cvref_v =
-    is_combinator_v<remove_cvref_t<T>>;
-
-template <typename... Ts>
-inline constexpr bool all_combinators_cvref_v =
-    (... & is_combinator_cvref_v<Ts>);
-
-} /* namespace detail */
-
-// Forward-declare the action combinator, the base combinator has to see it
-template <typename Cmb, typename Fn>
-class action_t;
-
-#define cppcmb_noexcept_subscript(...) \
-noexcept(noexcept(action_t(std::declval<__VA_ARGS__>(), cppcmb_fwd(fn))))
-
-/**
- * The actual type that all other combinators have to derive from.
- */
-template <typename Self>
-class combinator : public detail::crtp<Self>,
-                   private detail::combinator_base {
-public:
-    template <typename Fn>
-    [[nodiscard]] constexpr auto operator[](Fn&& fn) &
-        cppcmb_noexcept_subscript(Self&) {
-
-        return action_t(this->self(), cppcmb_fwd(fn));
-    }
-
-    template <typename Fn>
-    [[nodiscard]] constexpr auto operator[](Fn&& fn) const&
-        cppcmb_noexcept_subscript(Self const&) {
-
-        return action_t(this->self(), cppcmb_fwd(fn));
-    }
-
-    template <typename Fn>
-    [[nodiscard]] constexpr auto operator[](Fn&& fn) &&
-        cppcmb_noexcept_subscript(Self&&) {
-
-        return action_t(std::move(this->self()), cppcmb_fwd(fn));
-    }
-
-    template <typename Fn>
-    [[nodiscard]] constexpr auto operator[](Fn&& fn) const&&
-        cppcmb_noexcept_subscript(Self const&&) {
-
-        return action_t(std::move(this->self()), cppcmb_fwd(fn));
-    }
-};
-
-#undef cppcmb_noexcept_subscript
-
-namespace detail {
-
-/**
- * Concept check for parser interface.
- */
-template <typename T, typename Src>
-using apply_t = decltype(
-    std::declval<T>().apply(std::declval<reader<Src> const&>())
-);
-
-template <typename T, typename Src>
-inline constexpr bool has_parser_interface_v =
-       is_detected_v<apply_t, T, Src>
-    && is_combinator_v<T>;
-
-} /* namespace detail */
-
-/**
- * Every parser can use this at the beginning of the apply function to check
- * sub-parsers.
- */
-#define cppcmb_assert_parser(p, src)                  \
-static_assert(                                        \
-    ::cppcmb::detail::has_parser_interface_v<p, src>, \
-    "A parser must be derived from combinator<Self> " \
-    " and have a member function apply(reader<Src>)!" \
-    " (note: apply has to be const-qualified!)"       \
-)
-
-/**
- * Helper to get the parser result.
- */
-template <typename P, typename Src>
-using parser_result_t = detail::remove_cvref_t<decltype(
-    std::declval<P>().apply(std::declval<reader<Src> const&>())
-)>;
-
-/**
- * Helper to get the result value of a parse success.
- */
-template <typename P, typename Src>
-using parser_value_t = detail::remove_cvref_t<decltype(
-    std::declval<parser_result_t<P, Src>>().success().value()
-)>;
 
 } /* namespace cppcmb */
 
@@ -3059,6 +3107,19 @@ struct parser {
     }
 };
 
+class str_const {
+    const char * const p_;
+    const std::size_t sz_;
+public:
+    template <std::size_t N>
+    constexpr str_const( const char( & a )[ N ] )
+    : p_( a ), sz_( N - 1 ) {}
+    constexpr char operator[]( std::size_t n ) const {
+        return p_[ n ];
+    }
+    constexpr std::size_t size() const { return sz_; }
+};
+
 } /* namespace regex */
 } /* namespace detail */
 
@@ -3067,9 +3128,9 @@ struct parser {
  */
 #define cppcmb_str(str) ([]() -> std::string_view { return str; })
 
-template <typename Str>
-[[nodiscard]] constexpr auto regex(Str str) noexcept {
-    constexpr auto res = detail::regex::parser::top<0>(str);
+[[nodiscard]] constexpr auto regex(detail::regex::str_const str) noexcept {
+    auto s = [&] { return str; };
+    constexpr auto res = detail::regex::parser::top<0>(s);
     static_assert(
         !detail::regex::parser::is_failure(res),
         "Invalid regular-expression!"
