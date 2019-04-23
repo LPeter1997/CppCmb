@@ -59,7 +59,7 @@ public:
     using value_type = detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
     constexpr reader() noexcept
-        : m_Source(nullptr, 0U, nullptr) {
+        : m_Source(nullptr), m_Cursor(0U), m_MemoCtx(nullptr) {
     }
 
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept

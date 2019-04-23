@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include "detail.hpp"
@@ -167,30 +168,45 @@ template <typename... Rs>
 
 } /* namespace detail */
 
-template <typename Src, typename Tag>
+template <typename Lexer, typename Src>
 class token_iterator {
 public:
-    using value_type        = result<token<Tag>>;
+    using token_type        = detail::remove_cvref_t<decltype(
+        std::declval<Lexer const&>()
+            .rule()
+            .apply(std::declval<reader<Src> const&>())
+            .success()
+            .value()
+            .some()
+            .value()
+            .type()
+    )>;
+    using value_type        = result<token<token_type>>;
     using difference_type   = std::ptrdiff_t;
     using pointer           = value_type const*;
     using reference         = value_type const&;
     using iterator_category = std::forward_iterator_tag;
 
 private:
+    Lexer const*              m_Lexer;
     reader<Src>               m_Reader;
     std::optional<value_type> m_Last;
 
 public:
-    constexpr token_iterator() noexcept = default;
-
-    // XXX(LPeter1997): Noexcept specifier
-    constexpr token_iterator(Src const& src)
-        : m_Reader(src) {
-        // XXX(LPeter1997): First token
+    constexpr token_iterator() noexcept
+        : m_Lexer(nullptr), m_Reader(), m_Last(std::nullopt) {
     }
 
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator(Lexer const& l, Src const& src)
+        : m_Lexer(::std::addressof(l)), m_Reader(src) {
+        find_token();
+    }
+
+    template <typename Src2>
     [[nodiscard]]
-    constexpr bool operator==(token_iterator const& o) const noexcept {
+    constexpr bool
+    operator==(token_iterator<Lexer, Src2> const& o) const noexcept {
         // A null-source in the reader indicates the end
         if (m_Reader.source_ptr() == nullptr) {
             if (o.m_Reader.source_ptr() == nullptr) {
@@ -210,13 +226,18 @@ public:
             && m_Reader.cursor()     == o.m_Reader.cursor();
     }
 
+    template <typename Src2>
     [[nodiscard]]
-    constexpr bool operator!=(token_iterator const& o) const noexcept {
+    constexpr bool
+    operator!=(token_iterator<Lexer, Src2> const& o) const noexcept {
         return !operator==(o);
     }
 
     [[nodiscard]] constexpr reference operator*() const noexcept {
-        cppcmb_assert(m_Last.has_value());
+        cppcmb_assert(
+            "A value must be present for de-referencing!",
+            m_Last.has_value()
+        );
         return *m_Last;
     }
 
@@ -226,7 +247,29 @@ public:
 
     // XXX(LPeter1997): Noexcept specifier
     constexpr token_iterator& operator++() {
-        // XXX(LPeter1997): Implement
+        cppcmb_assert(
+            "A token iterator without a source can't be incremented!",
+            m_Reader.source_ptr() != nullptr
+        );
+        cppcmb_assert(
+            "A token iterator at the end can't be incremented!",
+            !m_Reader.is_end()
+        );
+        cppcmb_assert(
+            "Precondition of increment is dereferenceable!",
+            m_Last.has_value()
+        );
+        auto const& last = *m_Last;
+        if (last.is_success()) {
+            // For success we skip the entire thing
+            m_Reader.seek(m_Reader.cursor() + last.success().matched());
+        }
+        else {
+            // XXX(LPeter1997): Is this the best strategy?
+            // For failures we skip a single character
+            m_Reader.seek(m_Reader.cursor() + 1);
+        }
+        find_token();
         return *this;
     }
 
@@ -235,6 +278,40 @@ public:
         auto cpy = *this;
         operator++();
         return cpy;
+    }
+
+private:
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr void find_token() {
+        while (true) {
+            if (m_Reader.is_end()) {
+                return;
+            }
+            auto res = m_Lexer->rule().apply(m_Reader);
+            if (res.is_success()) {
+                auto succ = std::move(res).success();
+                if (succ.value().is_some()) {
+                    // Token, store it
+                    m_Last = value_type(
+                        success(
+                            std::move(succ).value().some().value(),
+                            succ.matched()
+                        ),
+                        res.furthest()
+                    );
+                    return;
+                }
+                else {
+                    // Skip
+                    m_Reader.seek(m_Reader.cursor() + succ.matched());
+                }
+            }
+            else {
+                // Error, store it
+                m_Last = value_type(std::move(res).failure(), res.furthest());
+                return;
+            }
+        }
     }
 };
 
@@ -269,44 +346,18 @@ public:
         : m_Rule(detail::make_lexer_parser(cppcmb_fwd(rules)...)) {
     }
 
+    [[nodiscard]] constexpr auto const& rule() const noexcept { return m_Rule; }
+
     // XXX(LPeter1997): Noexcept specifier
-    constexpr auto next() {
-        using token_t = detail::remove_cvref_t<
-            decltype(m_Rule.apply(m_Reader).success().value().some().value())
-        >;
-        using result_t = result<token_t>;
-
-        while (true) {
-            if (is_end()) {
-                return result_t(failure(), 0);
-            }
-            auto t = m_Rule.apply(m_Reader);
-            if (t.is_success()) {
-                auto succ = std::move(t).success();
-
-                m_Reader.seek(m_Reader.cursor() + succ.matched());
-
-                if (succ.value().is_some()) {
-                    return result_t(
-                        success(
-                            std::move(succ).value().some().value(),
-                            succ.matched()
-                        ),
-                        t.furthest()
-                    );
-                }
-                else {
-                    continue;
-                }
-            }
-            else {
-                return result_t(failure(), t.furthest());
-            }
-        }
+    template <typename Src>
+    [[nodiscard]] constexpr auto begin(Src const& src) const {
+        return token_iterator<lexer, Src>(*this, src);
     }
 
-    [[nodiscard]] constexpr auto is_end() const
-        cppcmb_return(m_Reader.is_end())
+    // XXX(LPeter1997): Noexcept specifier
+    [[nodiscard]] constexpr auto end() const {
+        return token_iterator<lexer, std::string_view>();
+    }
 };
 
 template <typename... Rs>

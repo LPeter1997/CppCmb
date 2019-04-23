@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-23 09:04:16.596031
+ * Generation date: 2019-04-23 13:31:11.798411
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -18,6 +18,7 @@
 #include <cassert>
 #include <cstddef>
 #include <deque>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -643,6 +644,10 @@ private:
 public:
     using value_type = detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
+    constexpr reader() noexcept
+        : m_Source(nullptr), m_Cursor(0U), m_MemoCtx(nullptr) {
+    }
+
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept
         : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {
         seek(idx);
@@ -663,8 +668,16 @@ public:
     // Just to avoid nasty bugs
     reader(Src const&& src, std::size_t idx, memo_context* t) = delete;
 
+    [[nodiscard]] constexpr auto* source_ptr() const noexcept {
+        return m_Source;
+    }
+
     [[nodiscard]] constexpr auto const& source() const noexcept {
-        return *m_Source;
+        cppcmb_assert(
+            "A reader without a source can't return a source-reference!",
+            source_ptr() != nullptr
+        );
+        return *source_ptr();
     }
 
     [[nodiscard]] constexpr auto const& cursor() const noexcept {
@@ -2154,6 +2167,8 @@ template <typename... Rs>
         !std::is_same_v<token_type, skip_t>,
         "There must be at least one token rule that doesn't skip!"
     );
+    // XXX(LPeter1997): We could do a check if the tokenizer succeeds for an
+    // empty string. If it does, tell the user it's a BAD idea.
     return (... | str_to_token_parser<token_type>(
         cppcmb_fwd(rules).source(),
         cppcmb_fwd(rules).tag()
@@ -2161,6 +2176,153 @@ template <typename... Rs>
 }
 
 } /* namespace detail */
+
+template <typename Lexer, typename Src>
+class token_iterator {
+public:
+    using token_type        = detail::remove_cvref_t<decltype(
+        std::declval<Lexer const&>()
+            .rule()
+            .apply(std::declval<reader<Src> const&>())
+            .success()
+            .value()
+            .some()
+            .value()
+            .type()
+    )>;
+    using value_type        = result<token<token_type>>;
+    using difference_type   = std::ptrdiff_t;
+    using pointer           = value_type const*;
+    using reference         = value_type const&;
+    using iterator_category = std::forward_iterator_tag;
+
+private:
+    Lexer const*              m_Lexer;
+    reader<Src>               m_Reader;
+    std::optional<value_type> m_Last;
+
+public:
+    constexpr token_iterator() noexcept
+        : m_Lexer(nullptr), m_Reader(), m_Last(std::nullopt) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator(Lexer const& l, Src const& src)
+        : m_Lexer(::std::addressof(l)), m_Reader(src) {
+        find_token();
+    }
+
+    template <typename Src2>
+    [[nodiscard]]
+    constexpr bool
+    operator==(token_iterator<Lexer, Src2> const& o) const noexcept {
+        // A null-source in the reader indicates the end
+        if (m_Reader.source_ptr() == nullptr) {
+            if (o.m_Reader.source_ptr() == nullptr) {
+                return true;
+            }
+            if (o.m_Reader.is_end()) {
+                return true;
+            }
+        }
+        if (o.m_Reader.source_ptr() == nullptr) {
+            if (m_Reader.is_end()) {
+                return true;
+            }
+        }
+        // Both readers have sources
+        return m_Reader.source_ptr() == o.m_Reader.source_ptr()
+            && m_Reader.cursor()     == o.m_Reader.cursor();
+    }
+
+    template <typename Src2>
+    [[nodiscard]]
+    constexpr bool
+    operator!=(token_iterator<Lexer, Src2> const& o) const noexcept {
+        return !operator==(o);
+    }
+
+    [[nodiscard]] constexpr reference operator*() const noexcept {
+        cppcmb_assert(
+            "A value must be present for de-referencing!",
+            m_Last.has_value()
+        );
+        return *m_Last;
+    }
+
+    [[nodiscard]] constexpr pointer operator->() const noexcept {
+        return ::std::addressof(operator*());
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator& operator++() {
+        cppcmb_assert(
+            "A token iterator without a source can't be incremented!",
+            m_Reader.source_ptr() != nullptr
+        );
+        cppcmb_assert(
+            "A token iterator at the end can't be incremented!",
+            !m_Reader.is_end()
+        );
+        cppcmb_assert(
+            "Precondition of increment is dereferenceable!",
+            m_Last.has_value()
+        );
+        auto const& last = *m_Last;
+        if (last.is_success()) {
+            // For success we skip the entire thing
+            m_Reader.seek(m_Reader.cursor() + last.success().matched());
+        }
+        else {
+            // XXX(LPeter1997): Is this the best strategy?
+            // For failures we skip a single character
+            m_Reader.seek(m_Reader.cursor() + 1);
+        }
+        find_token();
+        return *this;
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator operator++(int) {
+        auto cpy = *this;
+        operator++();
+        return cpy;
+    }
+
+private:
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr void find_token() {
+        while (true) {
+            if (m_Reader.is_end()) {
+                return;
+            }
+            auto res = m_Lexer->rule().apply(m_Reader);
+            if (res.is_success()) {
+                auto succ = std::move(res).success();
+                if (succ.value().is_some()) {
+                    // Token, store it
+                    m_Last = value_type(
+                        success(
+                            std::move(succ).value().some().value(),
+                            succ.matched()
+                        ),
+                        res.furthest()
+                    );
+                    return;
+                }
+                else {
+                    // Skip
+                    m_Reader.seek(m_Reader.cursor() + succ.matched());
+                }
+            }
+            else {
+                // Error, store it
+                m_Last = value_type(std::move(res).failure(), res.furthest());
+                return;
+            }
+        }
+    }
+};
 
 template <typename Src, typename Tag>
 class token_rule {
@@ -2181,63 +2343,35 @@ public:
     cppcmb_getter(tag, m_Tag)
 };
 
-template <typename Src, typename MainRule>
+template <typename MainRule>
 class lexer {
 private:
-    reader<Src> m_Reader;
     MainRule m_Rule;
 
 public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename... Rs>
-    constexpr lexer(Src const& src, Rs&&... rules)
-        : m_Reader(src),
-        m_Rule(detail::make_lexer_parser(cppcmb_fwd(rules)...)) {
+    constexpr lexer(Rs&&... rules)
+        : m_Rule(detail::make_lexer_parser(cppcmb_fwd(rules)...)) {
+    }
+
+    [[nodiscard]] constexpr auto const& rule() const noexcept { return m_Rule; }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto begin(Src const& src) const {
+        return token_iterator<lexer, Src>(*this, src);
     }
 
     // XXX(LPeter1997): Noexcept specifier
-    constexpr auto next() {
-        using token_t = detail::remove_cvref_t<
-            decltype(m_Rule.apply(m_Reader).success().value().some().value())
-        >;
-        using result_t = result<token_t>;
-
-        while (true) {
-            if (is_end()) {
-                return result_t(failure(), 0);
-            }
-            auto t = m_Rule.apply(m_Reader);
-            if (t.is_success()) {
-                auto succ = std::move(t).success();
-
-                m_Reader.seek(m_Reader.cursor() + succ.matched());
-
-                if (succ.value().is_some()) {
-                    return result_t(
-                        success(
-                            std::move(succ).value().some().value(),
-                            succ.matched()
-                        ),
-                        t.furthest()
-                    );
-                }
-                else {
-                    continue;
-                }
-            }
-            else {
-                return result_t(failure(), t.furthest());
-            }
-        }
+    [[nodiscard]] constexpr auto end() const {
+        return token_iterator<lexer, std::string_view>();
     }
-
-    [[nodiscard]] constexpr auto is_end() const
-        cppcmb_return(m_Reader.is_end())
 };
 
-template <typename Src, typename... Rs>
-lexer(Src, Rs&&...)
-    -> lexer<Src, decltype(detail::make_lexer_parser(std::declval<Rs&&>()...))>;
+template <typename... Rs>
+lexer(Rs&&...)
+    -> lexer<decltype(detail::make_lexer_parser(std::declval<Rs&&>()...))>;
 
 } /* namespace cppcmb */
 
