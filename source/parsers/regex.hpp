@@ -284,7 +284,7 @@ struct parser {
             }
         }
         else {
-            failure();
+            return failure();
         }
     }
 

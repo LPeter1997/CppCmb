@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-23 14:32:01.590588
+ * Generation date: 2019-04-23 14:59:16.753173
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -1899,7 +1899,7 @@ struct parser {
             }
         }
         else {
-            failure();
+            return failure();
         }
     }
 
