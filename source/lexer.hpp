@@ -11,6 +11,8 @@
 #define CPPCMB_LEXER_HPP
 
 #include <cstddef>
+#include <iterator>
+#include <memory>
 #include <type_traits>
 #include <utility>
 #include "detail.hpp"
@@ -155,6 +157,8 @@ template <typename... Rs>
         !std::is_same_v<token_type, skip_t>,
         "There must be at least one token rule that doesn't skip!"
     );
+    // XXX(LPeter1997): We could do a check if the tokenizer succeeds for an
+    // empty string. If it does, tell the user it's a BAD idea.
     return (... | str_to_token_parser<token_type>(
         cppcmb_fwd(rules).source(),
         cppcmb_fwd(rules).tag()
@@ -162,6 +166,74 @@ template <typename... Rs>
 }
 
 } /* namespace detail */
+
+template <typename Src, typename Tag>
+class token_iterator {
+public:
+    using value_type        = result<token<Tag>>;
+    using difference_type   = std::ptrdiff_t;
+    using pointer           = value_type const*;
+    using reference         = value_type const&;
+    using iterator_category = std::forward_iterator_tag;
+
+private:
+    reader<Src>               m_Reader;
+    std::optional<value_type> m_Last;
+
+public:
+    constexpr token_iterator() noexcept = default;
+
+    constexpr token_iterator(Src const& src) noexcept
+        : m_Reader(src) {
+    }
+
+    [[nodiscard]]
+    constexpr bool operator==(token_iterator const& o) const noexcept {
+        // A null-source in the reader indicates the end
+        if (m_Reader.source_ptr() == nullptr) {
+            if (o.m_Reader.source_ptr() == nullptr) {
+                return true;
+            }
+            if (o.m_Reader.is_end()) {
+                return true;
+            }
+        }
+        if (o.m_Reader.source_ptr() == nullptr) {
+            if (m_Reader.is_end()) {
+                return true;
+            }
+        }
+        // Both readers have sources
+        return m_Reader.source_ptr() == o.m_Reader.source_ptr()
+            && m_Reader.cursor()     == o.m_Reader.cursor();
+    }
+
+    [[nodiscard]]
+    constexpr bool operator!=(token_iterator const& o) const noexcept {
+        return !operator==(o);
+    }
+
+    [[nodiscard]] constexpr reference operator*() const noexcept {
+        cppcmb_assert(m_Last.has_value());
+        return *m_Last;
+    }
+
+    [[nodiscard]] constexpr pointer operator->() const noexcept {
+        return ::std::addressof(operator*());
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator& operator++() {
+        // XXX(LPeter1997): Implement
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator operator++(int) {
+        auto cpy = *this;
+        operator++();
+        return cpy;
+    }
+};
 
 template <typename Src, typename Tag>
 class token_rule {
@@ -182,18 +254,16 @@ public:
     cppcmb_getter(tag, m_Tag)
 };
 
-template <typename Src, typename MainRule>
+template <typename MainRule>
 class lexer {
 private:
-    reader<Src> m_Reader;
     MainRule m_Rule;
 
 public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename... Rs>
-    constexpr lexer(Src const& src, Rs&&... rules)
-        : m_Reader(src),
-        m_Rule(detail::make_lexer_parser(cppcmb_fwd(rules)...)) {
+    constexpr lexer(Rs&&... rules)
+        : m_Rule(detail::make_lexer_parser(cppcmb_fwd(rules)...)) {
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -236,9 +306,9 @@ public:
         cppcmb_return(m_Reader.is_end())
 };
 
-template <typename Src, typename... Rs>
-lexer(Src, Rs&&...)
-    -> lexer<Src, decltype(detail::make_lexer_parser(std::declval<Rs&&>()...))>;
+template <typename... Rs>
+lexer(Rs&&...)
+    -> lexer<decltype(detail::make_lexer_parser(std::declval<Rs&&>()...))>;
 
 } /* namespace cppcmb */
 

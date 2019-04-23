@@ -58,6 +58,10 @@ private:
 public:
     using value_type = detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
+    constexpr reader() noexcept
+        : m_Source(nullptr, 0U, nullptr) {
+    }
+
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept
         : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {
         seek(idx);
@@ -78,8 +82,16 @@ public:
     // Just to avoid nasty bugs
     reader(Src const&& src, std::size_t idx, memo_context* t) = delete;
 
+    [[nodiscard]] constexpr auto* source_ptr() const noexcept {
+        return m_Source;
+    }
+
     [[nodiscard]] constexpr auto const& source() const noexcept {
-        return *m_Source;
+        cppcmb_assert(
+            "A reader without a source can't return a source-reference!",
+            source_ptr() != nullptr
+        );
+        return *source_ptr();
     }
 
     [[nodiscard]] constexpr auto const& cursor() const noexcept {
