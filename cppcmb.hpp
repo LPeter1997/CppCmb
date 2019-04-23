@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-23 13:31:11.798411
+ * Generation date: 2019-04-23 13:34:50.803815
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -2342,6 +2342,8 @@ public:
     cppcmb_getter(source, m_Src)
     cppcmb_getter(tag, m_Tag)
 };
+
+#define cppcmb_token(rx, ...) ::cppcmb::token_rule(cppcmb_str(rx), __VA_ARGS__)
 
 template <typename MainRule>
 class lexer {

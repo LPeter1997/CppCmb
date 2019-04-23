@@ -334,6 +334,8 @@ public:
     cppcmb_getter(tag, m_Tag)
 };
 
+#define cppcmb_token(rx, ...) ::cppcmb::token_rule(cppcmb_str(rx), __VA_ARGS__)
+
 template <typename MainRule>
 class lexer {
 private:
