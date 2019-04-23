@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-22 18:58:39.970347
+ * Generation date: 2019-04-23 09:04:16.596031
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -844,6 +844,80 @@ using parser_value_t = detail::remove_cvref_t<decltype(
 namespace cppcmb {
 
 /**
+ * Some type-constructor for maybe.
+ */
+template <typename T>
+class some {
+public:
+    using value_type = T;
+
+private:
+    cppcmb_self_check(some);
+
+    T m_Value;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+    constexpr some(TFwd&& val)
+        : m_Value(cppcmb_fwd(val)) {
+    }
+
+    cppcmb_getter(value, m_Value)
+};
+
+template <typename TFwd>
+some(TFwd) -> some<TFwd>;
+
+/**
+ * None type-constructor for maybe.
+ */
+class none {};
+
+/**
+ * Generic maybe-type.
+ */
+template <typename T>
+class maybe {
+public:
+    using some_type = ::cppcmb::some<T>;
+    using none_type = ::cppcmb::none;
+
+private:
+    cppcmb_self_check(maybe);
+
+    std::variant<some_type, none_type> m_Data;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
+    constexpr maybe(TFwd&& val)
+        : m_Data(cppcmb_fwd(val)) {
+    }
+
+    [[nodiscard]] constexpr bool is_some() const noexcept {
+        return std::holds_alternative<some_type>(m_Data);
+    }
+
+    [[nodiscard]] constexpr bool is_none() const noexcept {
+        return std::holds_alternative<none_type>(m_Data);
+    }
+
+    cppcmb_getter(some, std::get<some_type>(m_Data))
+    cppcmb_getter(none, std::get<none_type>(m_Data))
+};
+
+namespace detail {
+
+cppcmb_is_specialization(maybe);
+
+} /* namespace detail */
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+/**
  * Success "type-constructor". The type that the parser returns when it
  * succeeded.
  */
@@ -923,6 +997,143 @@ public:
         return m_Furthest;
     }
 };
+
+} /* namespace cppcmb */
+
+namespace cppcmb {
+
+namespace detail {
+
+/**
+ * Just to improve error messages.
+ */
+struct action_apply_helper {
+    template <typename Fn, typename T>
+    constexpr auto operator()(Fn const& f, T&& v) const
+        cppcmb_return(apply_value(f, cppcmb_fwd(v)))
+};
+
+} /* namespace detail */
+
+template <typename P, typename Fn>
+class action_t : public combinator<action_t<P, Fn>> {
+private:
+    P  m_Parser;
+    Fn m_Fn;
+
+public:
+    // XXX(LPeter1997): Is it right to have such a long noexcept specifier?
+    template <typename PFwd, typename FnFwd>
+    constexpr action_t(PFwd&& cmb, FnFwd&& fn)
+        noexcept(
+            std::is_nothrow_constructible_v<P, PFwd&&>
+         && std::is_nothrow_constructible_v<Fn, FnFwd&&>
+        )
+        : m_Parser(cppcmb_fwd(cmb)), m_Fn(cppcmb_fwd(fn)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr decltype(auto) apply(reader<Src> const& src) const {
+        cppcmb_assert_parser(P, Src);
+
+        using value_t = parser_value_t<P, Src>;
+        using apply_t = decltype(&action_t::apply_fn<value_t&&>);
+        using fn_result_t = std::invoke_result_t<apply_t, action_t, value_t>;
+        using dispatch_tag =
+            detail::is_maybe<detail::remove_cvref_t<fn_result_t>>;
+
+        return apply_impl<fn_result_t>(src, dispatch_tag());
+    }
+
+private:
+    /**
+     * Original solution:
+     *
+     * template <typename T>
+     * using maybe_value_t = detail::remove_cvref_t<decltype(
+     *      std::declval<T>().some().value()
+     * )>;
+     *
+     * But it triggered a GCC internal compiler error.
+     */
+    template <typename T>
+    using maybe_some_t = typename detail::remove_cvref_t<T>::some_type;
+
+    template <typename T>
+    using maybe_value_t = typename maybe_some_t<T>::value_type;
+
+    // XXX(LPeter1997): Noexcept specifier
+    // Action can fail
+    template <typename FRes, typename Src>
+    [[nodiscard]] constexpr auto apply_impl(
+        reader<Src> const& src,
+        std::true_type) const -> result<maybe_value_t<FRes>> {
+
+        using result_t = result<maybe_value_t<FRes>>;
+
+        auto inv = m_Parser.apply(src);
+        if (inv.is_failure()) {
+            // Early failure
+            return result_t(std::move(inv).failure(), inv.furthest());
+        }
+
+        auto succ = std::move(inv).success();
+        // Try to apply the action
+        auto act_inv = apply_fn(std::move(succ).value());
+        // In any case we will have to decorate the result with the position
+        if (act_inv.is_none()) {
+            return result_t(failure(), inv.furthest());
+        }
+        else {
+            return result_t(
+                success(std::move(act_inv).some().value(), succ.matched()),
+                inv.furthest()
+            );
+        }
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    // Action can't fail
+    template <typename FRes, typename Src>
+    [[nodiscard]] constexpr auto apply_impl(
+        reader<Src> const& src,
+        std::false_type) const -> result<FRes> {
+
+        auto inv = m_Parser.apply(src);
+        if (inv.is_failure()) {
+            // Early failure
+            return result<FRes>(
+                std::move(inv).failure(),
+                inv.furthest()
+            );
+        }
+
+        auto succ = std::move(inv).success();
+        // Apply the action
+        auto act_val = apply_fn(std::move(succ).value());
+        // Wrap it in a success
+        return result<FRes>(
+            success(std::move(act_val), succ.matched()),
+            inv.furthest()
+        );
+    }
+
+    // Invoke the function with a value
+    template <typename T>
+    [[nodiscard]] constexpr decltype(auto) apply_fn(T&& val) const {
+        static_assert(
+            std::is_invocable_v<detail::action_apply_helper, Fn, T&&>,
+             "The given action function must be invocable with the parser's "
+             "successful value type! "
+             "(note: the function's invocation must be const-qualified!)"
+        );
+        return apply_value(m_Fn, cppcmb_fwd(val));
+    }
+};
+
+template <typename PFwd, typename FnFwd>
+action_t(PFwd, FnFwd) -> action_t<PFwd, FnFwd>;
 
 } /* namespace cppcmb */
 
@@ -1348,80 +1559,6 @@ template <typename P1, typename P2,
 
 namespace cppcmb {
 
-/**
- * Some type-constructor for maybe.
- */
-template <typename T>
-class some {
-public:
-    using value_type = T;
-
-private:
-    cppcmb_self_check(some);
-
-    T m_Value;
-
-public:
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
-    constexpr some(TFwd&& val)
-        : m_Value(cppcmb_fwd(val)) {
-    }
-
-    cppcmb_getter(value, m_Value)
-};
-
-template <typename TFwd>
-some(TFwd) -> some<TFwd>;
-
-/**
- * None type-constructor for maybe.
- */
-class none {};
-
-/**
- * Generic maybe-type.
- */
-template <typename T>
-class maybe {
-public:
-    using some_type = ::cppcmb::some<T>;
-    using none_type = ::cppcmb::none;
-
-private:
-    cppcmb_self_check(maybe);
-
-    std::variant<some_type, none_type> m_Data;
-
-public:
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename TFwd, cppcmb_requires_t(!is_self_v<TFwd>)>
-    constexpr maybe(TFwd&& val)
-        : m_Data(cppcmb_fwd(val)) {
-    }
-
-    [[nodiscard]] constexpr bool is_some() const noexcept {
-        return std::holds_alternative<some_type>(m_Data);
-    }
-
-    [[nodiscard]] constexpr bool is_none() const noexcept {
-        return std::holds_alternative<none_type>(m_Data);
-    }
-
-    cppcmb_getter(some, std::get<some_type>(m_Data))
-    cppcmb_getter(none, std::get<none_type>(m_Data))
-};
-
-namespace detail {
-
-cppcmb_is_specialization(maybe);
-
-} /* namespace detail */
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
 template <typename Pred>
 class filter {
 private:
@@ -1560,6 +1697,47 @@ public:
     [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
 };
 
+/**
+ * Succeeds when the underlying character-parser fails. Can only be used with
+ * single character parsers!
+ */
+template <typename P>
+class not_char : public combinator<not_char<P>> {
+private:
+    cppcmb_self_check(not_char);
+
+    P m_Parser;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename PFwd, cppcmb_requires_t(!is_self_v<PFwd>)>
+    constexpr not_char(PFwd&& p)
+        : m_Parser(cppcmb_fwd(p)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<product<>> {
+        cppcmb_assert_parser(P, Src);
+
+        using result_t = result<product<>>;
+
+        auto inv = m_Parser.apply(r);
+        if (inv.is_success()) {
+            // We fail
+            return result_t(failure(), inv.furthest());
+        }
+        else {
+            // We succeed
+            return result_t(success(product<>(), 1), inv.furthest());
+        }
+    }
+};
+
+template <typename PFwd>
+not_char(PFwd) -> not_char<PFwd>;
+
 struct parser {
     template <typename T>
     [[nodiscard]] static constexpr auto star(T p) noexcept {
@@ -1682,11 +1860,21 @@ struct parser {
             }
             else if constexpr (curr == '[') {
                 // Character classes
-                constexpr auto sub = char_grouping<Idx + 1>(src);
-                static_assert(!is_failure(sub));
-                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
-                static_assert(char_at<NextIdx>(src) == ']');
-                return success(sub.value(), sub.matched() + 2);
+                if constexpr (char_at<Idx + 1>(src) == '^') {
+                    // Negated group
+                    constexpr auto sub = char_grouping<Idx + 2>(src);
+                    static_assert(!is_failure(sub));
+                    constexpr std::size_t NextIdx = Idx + 2 + sub.matched();
+                    static_assert(char_at<NextIdx>(src) == ']');
+                    return success(not_char(sub.value()), sub.matched() + 3);
+                }
+                else {
+                    constexpr auto sub = char_grouping<Idx + 1>(src);
+                    static_assert(!is_failure(sub));
+                    constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
+                    static_assert(char_at<NextIdx>(src) == ']');
+                    return success(sub.value(), sub.matched() + 2);
+                }
             }
             else {
                 return literal<Idx>(src);
@@ -2416,143 +2604,6 @@ public:
 
 template <typename PFwd>
 parser(PFwd) -> parser<PFwd>;
-
-} /* namespace cppcmb */
-
-namespace cppcmb {
-
-namespace detail {
-
-/**
- * Just to improve error messages.
- */
-struct action_apply_helper {
-    template <typename Fn, typename T>
-    constexpr auto operator()(Fn const& f, T&& v) const
-        cppcmb_return(apply_value(f, cppcmb_fwd(v)))
-};
-
-} /* namespace detail */
-
-template <typename P, typename Fn>
-class action_t : public combinator<action_t<P, Fn>> {
-private:
-    P  m_Parser;
-    Fn m_Fn;
-
-public:
-    // XXX(LPeter1997): Is it right to have such a long noexcept specifier?
-    template <typename PFwd, typename FnFwd>
-    constexpr action_t(PFwd&& cmb, FnFwd&& fn)
-        noexcept(
-            std::is_nothrow_constructible_v<P, PFwd&&>
-         && std::is_nothrow_constructible_v<Fn, FnFwd&&>
-        )
-        : m_Parser(cppcmb_fwd(cmb)), m_Fn(cppcmb_fwd(fn)) {
-    }
-
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    [[nodiscard]] constexpr decltype(auto) apply(reader<Src> const& src) const {
-        cppcmb_assert_parser(P, Src);
-
-        using value_t = parser_value_t<P, Src>;
-        using apply_t = decltype(&action_t::apply_fn<value_t&&>);
-        using fn_result_t = std::invoke_result_t<apply_t, action_t, value_t>;
-        using dispatch_tag =
-            detail::is_maybe<detail::remove_cvref_t<fn_result_t>>;
-
-        return apply_impl<fn_result_t>(src, dispatch_tag());
-    }
-
-private:
-    /**
-     * Original solution:
-     *
-     * template <typename T>
-     * using maybe_value_t = detail::remove_cvref_t<decltype(
-     *      std::declval<T>().some().value()
-     * )>;
-     *
-     * But it triggered a GCC internal compiler error.
-     */
-    template <typename T>
-    using maybe_some_t = typename detail::remove_cvref_t<T>::some_type;
-
-    template <typename T>
-    using maybe_value_t = typename maybe_some_t<T>::value_type;
-
-    // XXX(LPeter1997): Noexcept specifier
-    // Action can fail
-    template <typename FRes, typename Src>
-    [[nodiscard]] constexpr auto apply_impl(
-        reader<Src> const& src,
-        std::true_type) const -> result<maybe_value_t<FRes>> {
-
-        using result_t = result<maybe_value_t<FRes>>;
-
-        auto inv = m_Parser.apply(src);
-        if (inv.is_failure()) {
-            // Early failure
-            return result_t(std::move(inv).failure(), inv.furthest());
-        }
-
-        auto succ = std::move(inv).success();
-        // Try to apply the action
-        auto act_inv = apply_fn(std::move(succ).value());
-        // In any case we will have to decorate the result with the position
-        if (act_inv.is_none()) {
-            return result_t(failure(), inv.furthest());
-        }
-        else {
-            return result_t(
-                success(std::move(act_inv).some().value(), succ.matched()),
-                inv.furthest()
-            );
-        }
-    }
-
-    // XXX(LPeter1997): Noexcept specifier
-    // Action can't fail
-    template <typename FRes, typename Src>
-    [[nodiscard]] constexpr auto apply_impl(
-        reader<Src> const& src,
-        std::false_type) const -> result<FRes> {
-
-        auto inv = m_Parser.apply(src);
-        if (inv.is_failure()) {
-            // Early failure
-            return result<FRes>(
-                std::move(inv).failure(),
-                inv.furthest()
-            );
-        }
-
-        auto succ = std::move(inv).success();
-        // Apply the action
-        auto act_val = apply_fn(std::move(succ).value());
-        // Wrap it in a success
-        return result<FRes>(
-            success(std::move(act_val), succ.matched()),
-            inv.furthest()
-        );
-    }
-
-    // Invoke the function with a value
-    template <typename T>
-    [[nodiscard]] constexpr decltype(auto) apply_fn(T&& val) const {
-        static_assert(
-            std::is_invocable_v<detail::action_apply_helper, Fn, T&&>,
-             "The given action function must be invocable with the parser's "
-             "successful value type! "
-             "(note: the function's invocation must be const-qualified!)"
-        );
-        return apply_value(m_Fn, cppcmb_fwd(val));
-    }
-};
-
-template <typename PFwd, typename FnFwd>
-action_t(PFwd, FnFwd) -> action_t<PFwd, FnFwd>;
 
 } /* namespace cppcmb */
 

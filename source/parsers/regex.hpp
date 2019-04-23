@@ -14,13 +14,17 @@
 #include <cstddef>
 #include <string_view>
 #include <type_traits>
+#include "action.hpp"
 #include "alt.hpp"
+#include "combinator.hpp"
 #include "many.hpp"
 #include "many1.hpp"
 #include "one.hpp"
 #include "seq.hpp"
 #include "../detail.hpp"
+#include "../product.hpp"
 #include "../reader.hpp"
+#include "../result.hpp"
 #include "../transformations/filter.hpp"
 #include "../transformations/select.hpp"
 
@@ -95,6 +99,47 @@ public:
 
     [[nodiscard]] constexpr std::size_t size() const noexcept { return cnt; }
 };
+
+/**
+ * Succeeds when the underlying character-parser fails. Can only be used with
+ * single character parsers!
+ */
+template <typename P>
+class not_char : public combinator<not_char<P>> {
+private:
+    cppcmb_self_check(not_char);
+
+    P m_Parser;
+
+public:
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename PFwd, cppcmb_requires_t(!is_self_v<PFwd>)>
+    constexpr not_char(PFwd&& p)
+        : m_Parser(cppcmb_fwd(p)) {
+    }
+
+    // XXX(LPeter1997): Noexcept specifier
+    template <typename Src>
+    [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
+        -> result<product<>> {
+        cppcmb_assert_parser(P, Src);
+
+        using result_t = result<product<>>;
+
+        auto inv = m_Parser.apply(r);
+        if (inv.is_success()) {
+            // We fail
+            return result_t(failure(), inv.furthest());
+        }
+        else {
+            // We succeed
+            return result_t(success(product<>(), 1), inv.furthest());
+        }
+    }
+};
+
+template <typename PFwd>
+not_char(PFwd) -> not_char<PFwd>;
 
 struct parser {
     template <typename T>
@@ -218,11 +263,21 @@ struct parser {
             }
             else if constexpr (curr == '[') {
                 // Character classes
-                constexpr auto sub = char_grouping<Idx + 1>(src);
-                static_assert(!is_failure(sub));
-                constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
-                static_assert(char_at<NextIdx>(src) == ']');
-                return success(sub.value(), sub.matched() + 2);
+                if constexpr (char_at<Idx + 1>(src) == '^') {
+                    // Negated group
+                    constexpr auto sub = char_grouping<Idx + 2>(src);
+                    static_assert(!is_failure(sub));
+                    constexpr std::size_t NextIdx = Idx + 2 + sub.matched();
+                    static_assert(char_at<NextIdx>(src) == ']');
+                    return success(not_char(sub.value()), sub.matched() + 3);
+                }
+                else {
+                    constexpr auto sub = char_grouping<Idx + 1>(src);
+                    static_assert(!is_failure(sub));
+                    constexpr std::size_t NextIdx = Idx + 1 + sub.matched();
+                    static_assert(char_at<NextIdx>(src) == ']');
+                    return success(sub.value(), sub.matched() + 2);
+                }
             }
             else {
                 return literal<Idx>(src);

@@ -14,6 +14,7 @@
 #include <type_traits>
 #include <utility>
 #include "combinator.hpp"
+#include "../maybe.hpp"
 #include "../result.hpp"
 
 namespace cppcmb {
