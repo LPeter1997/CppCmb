@@ -183,8 +183,10 @@ private:
 public:
     constexpr token_iterator() noexcept = default;
 
-    constexpr token_iterator(Src const& src) noexcept
+    // XXX(LPeter1997): Noexcept specifier
+    constexpr token_iterator(Src const& src)
         : m_Reader(src) {
+        // XXX(LPeter1997): First token
     }
 
     [[nodiscard]]
@@ -225,6 +227,7 @@ public:
     // XXX(LPeter1997): Noexcept specifier
     constexpr token_iterator& operator++() {
         // XXX(LPeter1997): Implement
+        return *this;
     }
 
     // XXX(LPeter1997): Noexcept specifier
