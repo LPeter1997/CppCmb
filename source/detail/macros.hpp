@@ -88,8 +88,13 @@ constexpr auto const&& name() const&& noexcept(noexcept(__VA_ARGS__)) { \
  * Returns an expression with automatic noexcept qualifier. Only for computed,
  * non-owned values.
  */
-#define cppcmb_return(...) \
-noexcept(noexcept(__VA_ARGS__)) -> decltype(__VA_ARGS__) { return __VA_ARGS__; }
+// XXX(LPeter1997): GCC internal compiler error
+/*
+#define cppcmb_return(...)                               \
+noexcept(noexcept(__VA_ARGS__)) -> decltype(__VA_ARGS__) \
+{ return __VA_ARGS__; }
+*/
+#define cppcmb_return(...) -> decltype(auto) { return __VA_ARGS__; }
 
 // Macro details
 

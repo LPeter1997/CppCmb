@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-23 13:34:50.803815
+ * Generation date: 2019-04-23 14:32:01.590588
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -219,8 +219,13 @@ constexpr auto const&& name() const&& noexcept(noexcept(__VA_ARGS__)) { \
  * Returns an expression with automatic noexcept qualifier. Only for computed,
  * non-owned values.
  */
-#define cppcmb_return(...) \
-noexcept(noexcept(__VA_ARGS__)) -> decltype(__VA_ARGS__) { return __VA_ARGS__; }
+// XXX(LPeter1997): GCC internal compiler error
+/*
+#define cppcmb_return(...)                               \
+noexcept(noexcept(__VA_ARGS__)) -> decltype(__VA_ARGS__) \
+{ return __VA_ARGS__; }
+*/
+#define cppcmb_return(...) -> decltype(auto) { return __VA_ARGS__; }
 
 // Macro details
 
