@@ -38,6 +38,7 @@ class ParseState(Enum):
     G_ENDIF = 3
 
 def process_file(root, fname):
+    full_root = os.path.realpath(SOURCE_PATH)
     full_path = os.path.join(root, fname)
     canon_path = os.path.realpath(full_path)
     if (canon_path in processed_files):
@@ -45,12 +46,17 @@ def process_file(root, fname):
 
     processed_files.add(canon_path)
 
-    base = os.path.splitext(os.path.basename(full_path))[0].upper()
-    g_ifndef = fr'#ifndef {INCLUDE_GUARD_PREFIX}_(\w*){base}_HPP'
-    #g_define = fr'#define {INCLUDE_GUARD_PREFIX}_\w*{base}_HPP'
-    #g_endif = fr'#endif /* {INCLUDE_GUARD_PREFIX}_\w*{base}_HPP */'
-    g_define = fr''
-    g_endif = fr''
+    #base = os.path.splitext(os.path.basename(full_path))[0].upper()
+
+    # Determinde what comes in between the prefix and HPP
+    center_part = os.path.relpath(canon_path, full_root)
+    if center_part[-4:] != '.hpp':
+        raise Exception(f'Invalid extension for file "{canon_path}"')
+    center_part = center_part[:-4].replace('\\', '_').replace('/', '_').upper()
+
+    g_ifndef = fr'#ifndef {INCLUDE_GUARD_PREFIX}_{center_part}_HPP'
+    g_define = fr'#define {INCLUDE_GUARD_PREFIX}_{center_part}_HPP'
+    g_endif = fr'#endif \/\* {INCLUDE_GUARD_PREFIX}_{center_part}_HPP \*\/'
 
     result = ''
     state = ParseState.INITIAL
@@ -58,9 +64,6 @@ def process_file(root, fname):
     with open(full_path, 'r') as file:
         for line in file:
             if state == ParseState.INITIAL and re.match(g_ifndef, line):
-                guard_mid = re.search(g_ifndef, line).group(1)
-                g_define = fr'#define {INCLUDE_GUARD_PREFIX}_{guard_mid}{base}_HPP'
-                g_endif = fr'#endif \/\* {INCLUDE_GUARD_PREFIX}_{guard_mid}{base}_HPP \*\/'
                 state = ParseState.G_IFNDEF
             elif state == ParseState.G_IFNDEF and re.match(g_define, line):
                 state = ParseState.G_DEFINE
