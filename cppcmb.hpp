@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-23 14:59:16.753173
+ * Generation date: 2019-04-27 12:30:48.563499
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -2124,6 +2124,7 @@ public:
 // XXX(LPeter1997): Noexcept specifier
 template <typename Tag, typename Src, typename TTag>
 [[nodiscard]] constexpr auto str_to_token_parser(Src src, TTag t) {
+    ((void)t); // Unused warning
     auto p = ::cppcmb::regex(src);
     using parser_type = decltype(p);
     if constexpr (std::is_same_v<TTag, skip_t>) {

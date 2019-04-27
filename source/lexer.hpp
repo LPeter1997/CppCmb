@@ -110,6 +110,7 @@ public:
 // XXX(LPeter1997): Noexcept specifier
 template <typename Tag, typename Src, typename TTag>
 [[nodiscard]] constexpr auto str_to_token_parser(Src src, TTag t) {
+    ((void)t); // Unused warning
     auto p = ::cppcmb::regex(src);
     using parser_type = decltype(p);
     if constexpr (std::is_same_v<TTag, skip_t>) {
