@@ -10,6 +10,10 @@
 #ifndef CPPCMB_TRANSFORMATIONS_SELECT_HPP
 #define CPPCMB_TRANSFORMATIONS_SELECT_HPP
 
+// XXX(LPeter1997): There is probably a bug with Clang where selecting nothing
+// from product<> fails. The JSON example (other repo right now) shows that at
+// line 127
+
 namespace cppcmb {
 
 template <std::size_t... Ns>
