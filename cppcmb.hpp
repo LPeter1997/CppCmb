@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-30 09:51:12.912819
+ * Generation date: 2019-04-30 10:01:54.867835
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -2982,30 +2982,26 @@ public:
                 tmp_res.furthest()
             ).first.value();
         }
-        else {
-            // Something is in the cache
-            if (auto* br_p = std::any_cast<base_rec>(entry)) {
-                auto& br = *br_p;
-                if (br.second) {
-                    // Recursion signal
-                    return this->put_memo(
-                        r,
-                        in_rec(result_t(failure(), 0U)),
-                        0U
-                    ).value();
-                }
-                return br.first.value();
+        // Something is in the cache
+        if (auto* br_p = std::any_cast<base_rec>(entry)) {
+            auto& br = *br_p;
+            if (br.second) {
+                // Recursion signal
+                return this->put_memo(
+                    r,
+                    in_rec(result_t(failure(), 0U)),
+                    0U
+                ).value();
             }
-            else {
-                auto* inr = std::any_cast<in_rec>(entry);
-                cppcmb_assert(
-                    "A direct-packrat parser must either enter a "
-                    "'base' or 'in'-recursion entry!",
-                    inr != nullptr
-                );
-                return inr->value();
-            }
+            return br.first.value();
         }
+        auto* inr = std::any_cast<in_rec>(entry);
+        cppcmb_assert(
+            "A direct-packrat parser must either enter a "
+            "'base' or 'in'-recursion entry!",
+            inr != nullptr
+        );
+        return inr->value();
     }
 };
 
