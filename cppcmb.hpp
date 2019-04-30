@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-30 10:13:17.233464
+ * Generation date: 2019-04-30 21:05:50.808514
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -1995,7 +1995,7 @@ struct parser {
 /**
  * A way to define compile-time strings.
  */
-#define cppcmb_str(str) ([]() -> std::string_view { return str; })
+#define cppcmb_str(str) ([] { return ::std::basic_string_view(str); })
 
 template <typename Str>
 [[nodiscard]] constexpr auto regex(Str str) noexcept {
@@ -2011,14 +2011,14 @@ template <typename Str>
 
 namespace cppcmb {
 
-template <typename Tag>
+template <typename CharT, typename Tag>
 class token {
 private:
-    std::string_view m_Content;
-    Tag              m_Type;
+    std::basic_string_view<CharT> m_Content;
+    Tag                           m_Type;
 
 public:
-    constexpr token(std::string_view cont, Tag ty) noexcept
+    constexpr token(std::basic_string_view<CharT> cont, Tag ty) noexcept
         : m_Content(cont), m_Type(ty) {
     }
 
@@ -2062,14 +2062,14 @@ public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
     [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<maybe<token<Tag>>> {
+        -> result<maybe<token<typename reader<Src>::value_type, Tag>>> {
 
-        using maybe_t = maybe<token<Tag>>;
+        using maybe_t = maybe<token<typename reader<Src>::value_type, Tag>>;
         using result_t = result<maybe_t>;
 
         auto t = m_Parser.apply(r);
         if (t.is_success()) {
-            std::string_view src = r.source();
+            auto src = std::basic_string_view(r.source());
             std::size_t len = t.success().matched();
             auto tok = token(src.substr(r.cursor(), len), m_Tag);
 
@@ -2097,9 +2097,9 @@ public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
     [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<maybe<token<Tag>>> {
+        -> result<maybe<token<typename reader<Src>::value_type, Tag>>> {
 
-        using maybe_t = maybe<token<Tag>>;
+        using maybe_t = maybe<token<typename reader<Src>::value_type, Tag>>;
         using result_t = result<maybe_t>;
 
         auto t = m_Parser.apply(r);
@@ -2188,7 +2188,8 @@ public:
             .value()
             .type()
     )>;
-    using value_type        = result<token<token_type>>;
+    using value_type        =
+        result<token<typename reader<Src>::value_type, token_type>>;
     using difference_type   = std::ptrdiff_t;
     using pointer           = value_type const*;
     using reference         = value_type const&;
@@ -2365,6 +2366,7 @@ public:
 
     // XXX(LPeter1997): Noexcept specifier
     [[nodiscard]] constexpr auto end() const {
+        // The kind of std::basic_string_view doesn't matter
         return token_iterator<lexer, std::string_view>();
     }
 };

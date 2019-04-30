@@ -384,7 +384,7 @@ struct parser {
 /**
  * A way to define compile-time strings.
  */
-#define cppcmb_str(str) ([]() -> std::string_view { return str; })
+#define cppcmb_str(str) ([] { return ::std::basic_string_view(str); })
 
 template <typename Str>
 [[nodiscard]] constexpr auto regex(Str str) noexcept {

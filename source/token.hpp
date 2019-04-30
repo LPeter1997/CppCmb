@@ -14,14 +14,14 @@
 
 namespace cppcmb {
 
-template <typename Tag>
+template <typename CharT, typename Tag>
 class token {
 private:
-    std::string_view m_Content;
-    Tag              m_Type;
+    std::basic_string_view<CharT> m_Content;
+    Tag                           m_Type;
 
 public:
-    constexpr token(std::string_view cont, Tag ty) noexcept
+    constexpr token(std::basic_string_view<CharT> cont, Tag ty) noexcept
         : m_Content(cont), m_Type(ty) {
     }
 

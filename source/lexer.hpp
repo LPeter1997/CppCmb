@@ -52,14 +52,14 @@ public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
     [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<maybe<token<Tag>>> {
+        -> result<maybe<token<typename reader<Src>::value_type, Tag>>> {
 
-        using maybe_t = maybe<token<Tag>>;
+        using maybe_t = maybe<token<typename reader<Src>::value_type, Tag>>;
         using result_t = result<maybe_t>;
 
         auto t = m_Parser.apply(r);
         if (t.is_success()) {
-            std::string_view src = r.source();
+            auto src = std::basic_string_view(r.source());
             std::size_t len = t.success().matched();
             auto tok = token(src.substr(r.cursor(), len), m_Tag);
 
@@ -87,9 +87,9 @@ public:
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
     [[nodiscard]] constexpr auto apply(reader<Src> const& r) const
-        -> result<maybe<token<Tag>>> {
+        -> result<maybe<token<typename reader<Src>::value_type, Tag>>> {
 
-        using maybe_t = maybe<token<Tag>>;
+        using maybe_t = maybe<token<typename reader<Src>::value_type, Tag>>;
         using result_t = result<maybe_t>;
 
         auto t = m_Parser.apply(r);
@@ -178,7 +178,8 @@ public:
             .value()
             .type()
     )>;
-    using value_type        = result<token<token_type>>;
+    using value_type        =
+        result<token<typename reader<Src>::value_type, token_type>>;
     using difference_type   = std::ptrdiff_t;
     using pointer           = value_type const*;
     using reference         = value_type const&;
@@ -355,6 +356,7 @@ public:
 
     // XXX(LPeter1997): Noexcept specifier
     [[nodiscard]] constexpr auto end() const {
+        // The kind of std::basic_string_view doesn't matter
         return token_iterator<lexer, std::string_view>();
     }
 };
