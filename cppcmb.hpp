@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-30 09:30:13.591950
+ * Generation date: 2019-04-30 09:51:12.912819
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -1955,7 +1955,8 @@ struct parser {
                 }
             }
         }
-    } // NOLINT(clang-diagnostic-return-type)
+        // NOLINTNEXTLINE
+    } // NOLINT
 
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto literal(Src src) noexcept {
@@ -2252,6 +2253,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
+    // NOLINTNEXTLINE(cert-dcl21-cpp)
     constexpr token_iterator& operator++() & {
         cppcmb_assert(
             "A token iterator without a source can't be incremented!",
@@ -2280,6 +2282,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
+    // NOLINTNEXTLINE(cert-dcl21-cpp)
     constexpr token_iterator operator++(int) & {
         auto cpy = *this;
         operator++();
@@ -2386,7 +2389,7 @@ namespace detail {
  */
 template <typename T>
 constexpr void hash_combine(std::size_t& seed, T const& v) {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+    // NOLINTNEXTLINE
     seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
@@ -2920,13 +2923,11 @@ private:
                 r, in_rec(old_res), max_furthest
             ).value();
         }
-        else {
-            // We need to overwrite max-furthest in the memo-table!
-            // That's why we don't simply return old_res
-            return this->put_memo(
-                r, in_rec(old_res), max_furthest
-            ).value();
-        }
+        // We need to overwrite max-furthest in the memo-table!
+        // That's why we don't simply return old_res
+        return this->put_memo(
+            r, in_rec(old_res), max_furthest
+        ).value();
     }
 
 public:
@@ -2967,21 +2968,19 @@ public:
                 ).value();
                 return grow(r, res);
             }
-            else {
-                // Base-thing, no progress
-                // Overwrite the base-type to contain the result
-                auto* br = std::any_cast<base_rec>(entry);
-                cppcmb_assert(
-                    "A direct-packrat parser must either enter a "
-                    "'base' or 'in'-recursion entry!",
-                    br != nullptr
-                );
-                return this->put_memo(
-                    r,
-                    base_rec(std::move(tmp_res), false),
-                    tmp_res.furthest()
-                ).first.value();
-            }
+            // Base-thing, no progress
+            // Overwrite the base-type to contain the result
+            auto* br = std::any_cast<base_rec>(entry);
+            cppcmb_assert(
+                "A direct-packrat parser must either enter a "
+                "'base' or 'in'-recursion entry!",
+                br != nullptr
+            );
+            return this->put_memo(
+                r,
+                base_rec(std::move(tmp_res), false),
+                tmp_res.furthest()
+            ).first.value();
         }
         else {
             // Something is in the cache
@@ -2995,9 +2994,7 @@ public:
                         0U
                     ).value();
                 }
-                else {
-                    return br.first.value();
-                }
+                return br.first.value();
             }
             else {
                 auto* inr = std::any_cast<in_rec>(entry);
@@ -3085,12 +3082,10 @@ public:
                     p1_succ.matched()
                 ), furthest);
             }
-            else {
-                return result_t(success(
-                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
-                    p2_succ.matched()
-                ), furthest);
-            }
+            return result_t(success(
+                sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                p2_succ.matched()
+            ), furthest);
         }
         // LHS succeeded
         if (p1_inv.is_success()) {
@@ -3116,14 +3111,12 @@ public:
         if (p1_inv.furthest() > p2_inv.furthest()) {
             return result_t(std::move(p1_err), furthest);
         }
-        else if (p1_inv.furthest() < p2_inv.furthest()) {
+        if (p1_inv.furthest() < p2_inv.furthest()) {
             return result_t(std::move(p2_err), furthest);
         }
-        else {
-            // They got to the same distance, need to merge errors
-            // XXX(LPeter1997): Implement, for now we just return the first
-            return result_t(std::move(p1_err), furthest);
-        }
+        // They got to the same distance, need to merge errors
+        // XXX(LPeter1997): Implement, for now we just return the first
+        return result_t(std::move(p1_err), furthest);
     }
 };
 
@@ -3161,9 +3154,7 @@ public:
             // XXX(LPeter1997): GCC bug
             return result<product<>>(success(product<>(), 0U), 0U);
         }
-        else {
-            return result<product<>>(failure(), 0U);
-        }
+        return result<product<>>(failure(), 0U);
     }
 };
 
@@ -3212,9 +3203,7 @@ private:
         if (auto* r = std::any_cast<std::shared_ptr<left_recursive>>(&a)) {
             return std::any_cast<T&>((*r)->seed());
         }
-        else {
-            return std::any_cast<T&>(a);
-        }
+        return std::any_cast<T&>(a);
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -3232,30 +3221,26 @@ private:
             if (cached == nullptr) {
                 return std::nullopt;
             }
-            else {
-                return *cached;
-            }
-        }
-        else {
-            auto& h = *in_heads;
-
-            if (cached == nullptr && !(
-                    this->original_id() == h.head_id()
-                || detail::contains(h.involved_set(), this->original_id())
-            )) {
-                return return_t(failure(), 0U);
-            }
-
-            auto it = h.eval_set().cend();
-            if (detail::contains(h.eval_set(), this->original_id(), it)) {
-                // Remove the rule id from the evaluation id set of the head
-                h.eval_set().erase(it);
-                auto tmp_res = m_Parser.apply(r);
-                *cached = tmp_res;
-            }
-
             return *cached;
         }
+        auto& h = *in_heads;
+
+        if (cached == nullptr && !(
+               this->original_id() == h.head_id()
+            || detail::contains(h.involved_set(), this->original_id())
+        )) {
+            return return_t(failure(), 0U);
+        }
+
+        auto it = h.eval_set().cend();
+        if (detail::contains(h.eval_set(), this->original_id(), it)) {
+            // Remove the rule id from the evaluation id set of the head
+            h.eval_set().erase(it);
+            auto tmp_res = m_Parser.apply(r);
+            *cached = tmp_res;
+        }
+
+        return *cached;
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -3296,15 +3281,11 @@ private:
         if (h.head_id() != this->original_id()) {
             return seed;
         }
-        else {
-            auto& s = this->put_memo(r, seed, seed.furthest());
-            if (s.is_failure()) {
-                return s;
-            }
-            else {
-                return grow(r, s, h);
-            }
+        auto& s = this->put_memo(r, seed, seed.furthest());
+        if (s.is_failure()) {
+            return s;
         }
+        return grow(r, s, h);
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -3346,22 +3327,6 @@ private:
                 );
                 return grow(r, new_old, h);
             }
-            else {
-                // We need to overwrite max-furthest in the memo-table!
-                // That's why we don't simply return old_res
-
-                auto it = rec_heads.find(r);
-                cppcmb_assert("", it != rec_heads.end());
-                rec_heads.erase(it);
-
-                // auto* val = this->get_memo(r);
-                // cppcmb_assert("", val != nullptr);
-
-                // return this-> template to_result<return_t>(*val);
-                return this->put_memo(r, std::move(old_res), max_furthest);
-            }
-        }
-        else {
             // We need to overwrite max-furthest in the memo-table!
             // That's why we don't simply return old_res
 
@@ -3369,8 +3334,21 @@ private:
             cppcmb_assert("", it != rec_heads.end());
             rec_heads.erase(it);
 
+            // auto* val = this->get_memo(r);
+            // cppcmb_assert("", val != nullptr);
+
+            // return this-> template to_result<return_t>(*val);
             return this->put_memo(r, std::move(old_res), max_furthest);
         }
+
+        // We need to overwrite max-furthest in the memo-table!
+        // That's why we don't simply return old_res
+
+        auto it = rec_heads.find(r);
+        cppcmb_assert("", it != rec_heads.end());
+        rec_heads.erase(it);
+
+        return this->put_memo(r, std::move(old_res), max_furthest);
     }
 
 public:
@@ -3403,23 +3381,15 @@ public:
             if (!base->head()) {
                 return this->put_memo(r, tmp_res, tmp_res.furthest());
             }
-            else {
-                base->seed() = tmp_res;
-                return lr_answer(r, *base);
-            }
+            base->seed() = tmp_res;
+            return lr_answer(r, *base);
         }
-        else {
-            auto& entry = *m;
-            if (auto* lr =
-                std::any_cast<std::shared_ptr<left_recursive>>(&entry)) {
-
-                setup_lr(r, **lr);
-                return this-> template to_result<return_t>((*lr)->seed());
-            }
-            else {
-                return this-> template to_result<return_t>(entry);
-            }
+        auto& entry = *m;
+        if (auto* lr = std::any_cast<std::shared_ptr<left_recursive>>(&entry)) {
+            setup_lr(r, **lr);
+            return this-> template to_result<return_t>((*lr)->seed());
         }
+        return this-> template to_result<return_t>(entry);
     }
 };
 
@@ -3478,16 +3448,14 @@ public:
                 p_inv.furthest()
             );
         }
-        else {
-            auto succ = std::move(p_inv).success();
-            return result_t(
-                success(
-                    value_t<Src>(some(std::move(succ).value())),
-                    succ.matched()
-                ),
-                p_inv.furthest()
-            );
-        }
+        auto succ = std::move(p_inv).success();
+        return result_t(
+            success(
+                value_t<Src>(some(std::move(succ).value())),
+                succ.matched()
+            ),
+            p_inv.furthest()
+        );
     }
 };
 

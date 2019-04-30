@@ -33,9 +33,7 @@ private:
         if (auto* r = std::any_cast<std::shared_ptr<left_recursive>>(&a)) {
             return std::any_cast<T&>((*r)->seed());
         }
-        else {
-            return std::any_cast<T&>(a);
-        }
+        return std::any_cast<T&>(a);
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -53,30 +51,26 @@ private:
             if (cached == nullptr) {
                 return std::nullopt;
             }
-            else {
-                return *cached;
-            }
-        }
-        else {
-            auto& h = *in_heads;
-
-            if (cached == nullptr && !(
-                    this->original_id() == h.head_id()
-                || detail::contains(h.involved_set(), this->original_id())
-            )) {
-                return return_t(failure(), 0U);
-            }
-
-            auto it = h.eval_set().cend();
-            if (detail::contains(h.eval_set(), this->original_id(), it)) {
-                // Remove the rule id from the evaluation id set of the head
-                h.eval_set().erase(it);
-                auto tmp_res = m_Parser.apply(r);
-                *cached = tmp_res;
-            }
-
             return *cached;
         }
+        auto& h = *in_heads;
+
+        if (cached == nullptr && !(
+               this->original_id() == h.head_id()
+            || detail::contains(h.involved_set(), this->original_id())
+        )) {
+            return return_t(failure(), 0U);
+        }
+
+        auto it = h.eval_set().cend();
+        if (detail::contains(h.eval_set(), this->original_id(), it)) {
+            // Remove the rule id from the evaluation id set of the head
+            h.eval_set().erase(it);
+            auto tmp_res = m_Parser.apply(r);
+            *cached = tmp_res;
+        }
+
+        return *cached;
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -117,15 +111,11 @@ private:
         if (h.head_id() != this->original_id()) {
             return seed;
         }
-        else {
-            auto& s = this->put_memo(r, seed, seed.furthest());
-            if (s.is_failure()) {
-                return s;
-            }
-            else {
-                return grow(r, s, h);
-            }
+        auto& s = this->put_memo(r, seed, seed.furthest());
+        if (s.is_failure()) {
+            return s;
         }
+        return grow(r, s, h);
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -167,22 +157,6 @@ private:
                 );
                 return grow(r, new_old, h);
             }
-            else {
-                // We need to overwrite max-furthest in the memo-table!
-                // That's why we don't simply return old_res
-
-                auto it = rec_heads.find(r);
-                cppcmb_assert("", it != rec_heads.end());
-                rec_heads.erase(it);
-
-                // auto* val = this->get_memo(r);
-                // cppcmb_assert("", val != nullptr);
-
-                // return this-> template to_result<return_t>(*val);
-                return this->put_memo(r, std::move(old_res), max_furthest);
-            }
-        }
-        else {
             // We need to overwrite max-furthest in the memo-table!
             // That's why we don't simply return old_res
 
@@ -190,8 +164,21 @@ private:
             cppcmb_assert("", it != rec_heads.end());
             rec_heads.erase(it);
 
+            // auto* val = this->get_memo(r);
+            // cppcmb_assert("", val != nullptr);
+
+            // return this-> template to_result<return_t>(*val);
             return this->put_memo(r, std::move(old_res), max_furthest);
         }
+
+        // We need to overwrite max-furthest in the memo-table!
+        // That's why we don't simply return old_res
+
+        auto it = rec_heads.find(r);
+        cppcmb_assert("", it != rec_heads.end());
+        rec_heads.erase(it);
+
+        return this->put_memo(r, std::move(old_res), max_furthest);
     }
 
 public:
@@ -224,23 +211,15 @@ public:
             if (!base->head()) {
                 return this->put_memo(r, tmp_res, tmp_res.furthest());
             }
-            else {
-                base->seed() = tmp_res;
-                return lr_answer(r, *base);
-            }
+            base->seed() = tmp_res;
+            return lr_answer(r, *base);
         }
-        else {
-            auto& entry = *m;
-            if (auto* lr =
-                std::any_cast<std::shared_ptr<left_recursive>>(&entry)) {
-
-                setup_lr(r, **lr);
-                return this-> template to_result<return_t>((*lr)->seed());
-            }
-            else {
-                return this-> template to_result<return_t>(entry);
-            }
+        auto& entry = *m;
+        if (auto* lr = std::any_cast<std::shared_ptr<left_recursive>>(&entry)) {
+            setup_lr(r, **lr);
+            return this-> template to_result<return_t>((*lr)->seed());
         }
+        return this-> template to_result<return_t>(entry);
     }
 };
 

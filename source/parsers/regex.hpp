@@ -344,7 +344,8 @@ struct parser {
                 }
             }
         }
-    } // NOLINT(clang-diagnostic-return-type)
+        // NOLINTNEXTLINE
+    } // NOLINT
 
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto literal(Src src) noexcept {

@@ -65,12 +65,10 @@ public:
                     p1_succ.matched()
                 ), furthest);
             }
-            else {
-                return result_t(success(
-                    sum_values<value_t<Src>>(std::move(p2_succ).value()),
-                    p2_succ.matched()
-                ), furthest);
-            }
+            return result_t(success(
+                sum_values<value_t<Src>>(std::move(p2_succ).value()),
+                p2_succ.matched()
+            ), furthest);
         }
         // LHS succeeded
         if (p1_inv.is_success()) {
@@ -96,14 +94,12 @@ public:
         if (p1_inv.furthest() > p2_inv.furthest()) {
             return result_t(std::move(p1_err), furthest);
         }
-        else if (p1_inv.furthest() < p2_inv.furthest()) {
+        if (p1_inv.furthest() < p2_inv.furthest()) {
             return result_t(std::move(p2_err), furthest);
         }
-        else {
-            // They got to the same distance, need to merge errors
-            // XXX(LPeter1997): Implement, for now we just return the first
-            return result_t(std::move(p1_err), furthest);
-        }
+        // They got to the same distance, need to merge errors
+        // XXX(LPeter1997): Implement, for now we just return the first
+        return result_t(std::move(p1_err), furthest);
     }
 };
 

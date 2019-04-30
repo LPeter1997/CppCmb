@@ -27,9 +27,7 @@ public:
             // XXX(LPeter1997): GCC bug
             return result<product<>>(success(product<>(), 0U), 0U);
         }
-        else {
-            return result<product<>>(failure(), 0U);
-        }
+        return result<product<>>(failure(), 0U);
     }
 };
 

@@ -92,13 +92,11 @@ private:
                 r, in_rec(old_res), max_furthest
             ).value();
         }
-        else {
-            // We need to overwrite max-furthest in the memo-table!
-            // That's why we don't simply return old_res
-            return this->put_memo(
-                r, in_rec(old_res), max_furthest
-            ).value();
-        }
+        // We need to overwrite max-furthest in the memo-table!
+        // That's why we don't simply return old_res
+        return this->put_memo(
+            r, in_rec(old_res), max_furthest
+        ).value();
     }
 
 public:
@@ -139,21 +137,19 @@ public:
                 ).value();
                 return grow(r, res);
             }
-            else {
-                // Base-thing, no progress
-                // Overwrite the base-type to contain the result
-                auto* br = std::any_cast<base_rec>(entry);
-                cppcmb_assert(
-                    "A direct-packrat parser must either enter a "
-                    "'base' or 'in'-recursion entry!",
-                    br != nullptr
-                );
-                return this->put_memo(
-                    r,
-                    base_rec(std::move(tmp_res), false),
-                    tmp_res.furthest()
-                ).first.value();
-            }
+            // Base-thing, no progress
+            // Overwrite the base-type to contain the result
+            auto* br = std::any_cast<base_rec>(entry);
+            cppcmb_assert(
+                "A direct-packrat parser must either enter a "
+                "'base' or 'in'-recursion entry!",
+                br != nullptr
+            );
+            return this->put_memo(
+                r,
+                base_rec(std::move(tmp_res), false),
+                tmp_res.furthest()
+            ).first.value();
         }
         else {
             // Something is in the cache
@@ -167,9 +163,7 @@ public:
                         0U
                     ).value();
                 }
-                else {
-                    return br.first.value();
-                }
+                return br.first.value();
             }
             else {
                 auto* inr = std::any_cast<in_rec>(entry);

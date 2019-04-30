@@ -48,16 +48,14 @@ public:
                 p_inv.furthest()
             );
         }
-        else {
-            auto succ = std::move(p_inv).success();
-            return result_t(
-                success(
-                    value_t<Src>(some(std::move(succ).value())),
-                    succ.matched()
-                ),
-                p_inv.furthest()
-            );
-        }
+        auto succ = std::move(p_inv).success();
+        return result_t(
+            success(
+                value_t<Src>(some(std::move(succ).value())),
+                succ.matched()
+            ),
+            p_inv.furthest()
+        );
     }
 };
 

@@ -243,6 +243,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
+    // NOLINTNEXTLINE(cert-dcl21-cpp)
     constexpr token_iterator& operator++() & {
         cppcmb_assert(
             "A token iterator without a source can't be incremented!",
@@ -271,6 +272,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
+    // NOLINTNEXTLINE(cert-dcl21-cpp)
     constexpr token_iterator operator++(int) & {
         auto cpy = *this;
         operator++();
