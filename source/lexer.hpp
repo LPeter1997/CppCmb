@@ -68,9 +68,7 @@ public:
                 t.furthest()
             );
         }
-        else {
-            return result_t(std::move(t).failure(), t.furthest());
-        }
+        return result_t(std::move(t).failure(), t.furthest());
     }
 };
 
@@ -101,9 +99,7 @@ public:
                 t.furthest()
             );
         }
-        else {
-            return result_t(std::move(t).failure(), t.furthest());
-        }
+        return result_t(std::move(t).failure(), t.furthest());
     }
 };
 
@@ -247,7 +243,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
-    constexpr token_iterator& operator++() {
+    constexpr token_iterator& operator++() & {
         cppcmb_assert(
             "A token iterator without a source can't be incremented!",
             m_Reader.source_ptr() != nullptr
@@ -275,7 +271,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
-    constexpr token_iterator operator++(int) {
+    constexpr token_iterator operator++(int) & {
         auto cpy = *this;
         operator++();
         return cpy;
@@ -302,10 +298,8 @@ private:
                     );
                     return;
                 }
-                else {
-                    // Skip
-                    m_Reader.seek(m_Reader.cursor() + succ.matched());
-                }
+                // Skip
+                m_Reader.seek(m_Reader.cursor() + succ.matched());
             }
             else {
                 // Error, store it

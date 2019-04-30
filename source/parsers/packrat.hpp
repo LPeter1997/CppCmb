@@ -26,6 +26,7 @@ private:
 
 protected:
     constexpr packrat_base() noexcept
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         : m_ID(reinterpret_cast<std::uintptr_t>(this)) {
     }
 
@@ -85,9 +86,7 @@ public:
             auto res = m_Parser.apply(r);
             return this->put_memo(r, std::move(res), res.furthest());
         }
-        else {
-            return std::any_cast<result_t&>(*entry);
-        }
+        return std::any_cast<result_t&>(*entry);
     }
 };
 

@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-30 09:10:13.332522
+ * Generation date: 2019-04-30 09:30:13.591950
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -1922,6 +1922,7 @@ struct parser {
         }
     }
 
+    // XXX(LPeter1997): Clang bug here...
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto group_element(Src src) noexcept {
         if constexpr (char_at<Idx>(src) == '\\'
@@ -1954,7 +1955,7 @@ struct parser {
                 }
             }
         }
-    }
+    } // NOLINT(clang-diagnostic-return-type)
 
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto literal(Src src) noexcept {
@@ -2076,9 +2077,7 @@ public:
                 t.furthest()
             );
         }
-        else {
-            return result_t(std::move(t).failure(), t.furthest());
-        }
+        return result_t(std::move(t).failure(), t.furthest());
     }
 };
 
@@ -2109,9 +2108,7 @@ public:
                 t.furthest()
             );
         }
-        else {
-            return result_t(std::move(t).failure(), t.furthest());
-        }
+        return result_t(std::move(t).failure(), t.furthest());
     }
 };
 
@@ -2255,7 +2252,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
-    constexpr token_iterator& operator++() {
+    constexpr token_iterator& operator++() & {
         cppcmb_assert(
             "A token iterator without a source can't be incremented!",
             m_Reader.source_ptr() != nullptr
@@ -2283,7 +2280,7 @@ public:
     }
 
     // XXX(LPeter1997): Noexcept specifier
-    constexpr token_iterator operator++(int) {
+    constexpr token_iterator operator++(int) & {
         auto cpy = *this;
         operator++();
         return cpy;
@@ -2310,10 +2307,8 @@ private:
                     );
                     return;
                 }
-                else {
-                    // Skip
-                    m_Reader.seek(m_Reader.cursor() + succ.matched());
-                }
+                // Skip
+                m_Reader.seek(m_Reader.cursor() + succ.matched());
             }
             else {
                 // Error, store it
@@ -2391,6 +2386,7 @@ namespace detail {
  */
 template <typename T>
 constexpr void hash_combine(std::size_t& seed, T const& v) {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
@@ -2578,9 +2574,7 @@ public:
         if (it == m_Heads.end()) {
             return nullptr;
         }
-        else {
-            return it->second;
-        }
+        return it->second;
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -2754,6 +2748,7 @@ private:
 
 protected:
     constexpr packrat_base() noexcept
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         : m_ID(reinterpret_cast<std::uintptr_t>(this)) {
     }
 
@@ -2813,9 +2808,7 @@ public:
             auto res = m_Parser.apply(r);
             return this->put_memo(r, std::move(res), res.furthest());
         }
-        else {
-            return std::any_cast<result_t&>(*entry);
-        }
+        return std::any_cast<result_t&>(*entry);
     }
 };
 
@@ -2921,13 +2914,11 @@ private:
                 ).value();
                 return grow(r, new_old);
             }
-            else {
-                // We need to overwrite max-furthest in the memo-table!
-                // That's why we don't simply return old_res
-                return this->put_memo(
-                    r, in_rec(old_res), max_furthest
-                ).value();
-            }
+            // We need to overwrite max-furthest in the memo-table!
+            // That's why we don't simply return old_res
+            return this->put_memo(
+                r, in_rec(old_res), max_furthest
+            ).value();
         }
         else {
             // We need to overwrite max-furthest in the memo-table!

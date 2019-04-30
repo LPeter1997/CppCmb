@@ -86,13 +86,11 @@ private:
                 ).value();
                 return grow(r, new_old);
             }
-            else {
-                // We need to overwrite max-furthest in the memo-table!
-                // That's why we don't simply return old_res
-                return this->put_memo(
-                    r, in_rec(old_res), max_furthest
-                ).value();
-            }
+            // We need to overwrite max-furthest in the memo-table!
+            // That's why we don't simply return old_res
+            return this->put_memo(
+                r, in_rec(old_res), max_furthest
+            ).value();
         }
         else {
             // We need to overwrite max-furthest in the memo-table!

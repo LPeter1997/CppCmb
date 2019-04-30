@@ -311,6 +311,7 @@ struct parser {
         }
     }
 
+    // XXX(LPeter1997): Clang bug here...
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto group_element(Src src) noexcept {
         if constexpr (char_at<Idx>(src) == '\\'
@@ -343,7 +344,7 @@ struct parser {
                 }
             }
         }
-    }
+    } // NOLINT(clang-diagnostic-return-type)
 
     template <std::size_t Idx, typename Src>
     [[nodiscard]] static constexpr auto literal(Src src) noexcept {

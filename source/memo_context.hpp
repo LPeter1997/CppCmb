@@ -35,6 +35,7 @@ namespace detail {
  */
 template <typename T>
 constexpr void hash_combine(std::size_t& seed, T const& v) {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
@@ -222,9 +223,7 @@ public:
         if (it == m_Heads.end()) {
             return nullptr;
         }
-        else {
-            return it->second;
-        }
+        return it->second;
     }
 
     // XXX(LPeter1997): Noexcept specifier
