@@ -51,16 +51,14 @@ public:
     );
 
 private:
-    Src const*    m_Source;
-    std::size_t   m_Cursor;
-    memo_context* m_MemoCtx;
+    Src const*    m_Source  = nullptr;
+    std::size_t   m_Cursor  = 0U;
+    memo_context* m_MemoCtx = nullptr;
 
 public:
     using value_type = detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
-    constexpr reader() noexcept
-        : m_Source(nullptr), m_Cursor(0U), m_MemoCtx(nullptr) {
-    }
+    constexpr reader() noexcept = default;
 
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept
         : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {

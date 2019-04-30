@@ -19,7 +19,7 @@ namespace detail {
 /**
  * @see https://en.cppreference.com/w/cpp/experimental/nonesuch
  */
-struct nonesuch {
+struct nonesuch { // NOLINT(cppcoreguidelines-special-member-functions)
     ~nonesuch()                     = delete;
     nonesuch(nonesuch const&)       = delete;
     void operator=(nonesuch const&) = delete;

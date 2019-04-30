@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-27 12:30:48.563499
+ * Generation date: 2019-04-30 08:43:49.289372
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -58,7 +58,7 @@ namespace detail {
 /**
  * @see https://en.cppreference.com/w/cpp/experimental/nonesuch
  */
-struct nonesuch {
+struct nonesuch { // NOLINT(cppcoreguidelines-special-member-functions)
     ~nonesuch()                     = delete;
     nonesuch(nonesuch const&)       = delete;
     void operator=(nonesuch const&) = delete;
@@ -642,16 +642,14 @@ public:
     );
 
 private:
-    Src const*    m_Source;
-    std::size_t   m_Cursor;
-    memo_context* m_MemoCtx;
+    Src const*    m_Source  = nullptr;
+    std::size_t   m_Cursor  = 0U;
+    memo_context* m_MemoCtx = nullptr;
 
 public:
     using value_type = detail::remove_cvref_t<decltype((*m_Source)[m_Cursor])>;
 
-    constexpr reader() noexcept
-        : m_Source(nullptr), m_Cursor(0U), m_MemoCtx(nullptr) {
-    }
+    constexpr reader() noexcept = default;
 
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept
         : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {
@@ -1623,6 +1621,10 @@ template <typename PredFwd>
 filter(PredFwd) -> filter<PredFwd>;
 
 } /* namespace cppcmb */
+
+// XXX(LPeter1997): There is probably a bug with Clang where selecting nothing
+// from product<> fails. The JSON example (other repo right now) shows that at
+// line 127
 
 namespace cppcmb {
 
