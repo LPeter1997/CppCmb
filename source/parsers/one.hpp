@@ -29,9 +29,8 @@ public:
             // Nothing to consume
             return result_t(failure(), 0U);
         }
-        else {
-            return result_t(success(r.current(), 1U), 1U);
-        }
+        // Consume an element
+        return result_t(success(r.current(), 1U), 1U);
     }
 };
 

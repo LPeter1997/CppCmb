@@ -53,11 +53,11 @@ public:
         );
 
         if (m_Predicate(args...)) {
+            // Predicate returned true, succeed
             return some(product_values(cppcmb_fwd(args)...));
         }
-        else {
-            return none();
-        }
+        // Predicate failed, fail
+        return none();
     }
 };
 

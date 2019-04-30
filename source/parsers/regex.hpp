@@ -131,10 +131,8 @@ public:
             // We fail
             return result_t(failure(), inv.furthest());
         }
-        else {
-            // We succeed
-            return result_t(success(product<>(), 1), inv.furthest());
-        }
+        // We succeed
+        return result_t(success(product<>(), 1), inv.furthest());
     }
 };
 

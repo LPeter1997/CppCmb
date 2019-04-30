@@ -2,7 +2,7 @@
  * cppcmb.hpp
  *
  * This file has been merged from multiple source files.
- * Generation date: 2019-04-30 08:43:49.289372
+ * Generation date: 2019-04-30 09:10:13.332522
  *
  * Copyright (c) 2018-2019 Peter Lenkefi
  * Distributed under the MIT License.
@@ -652,7 +652,7 @@ public:
     constexpr reader() noexcept = default;
 
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept
-        : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {
+        : m_Source(::std::addressof(src)), m_MemoCtx(t) {
         seek(idx);
     }
 
@@ -1101,12 +1101,11 @@ private:
         if (act_inv.is_none()) {
             return result_t(failure(), inv.furthest());
         }
-        else {
-            return result_t(
-                success(std::move(act_inv).some().value(), succ.matched()),
-                inv.furthest()
-            );
-        }
+
+        return result_t(
+            success(std::move(act_inv).some().value(), succ.matched()),
+            inv.furthest()
+        );
     }
 
     // XXX(LPeter1997): Noexcept specifier
@@ -1233,14 +1232,12 @@ public:
         if (p1_inv.furthest() > p2_inv.furthest()) {
             return result_t(std::move(p1_err), p1_inv.furthest());
         }
-        else if (p1_inv.furthest() < p2_inv.furthest()) {
+        if (p1_inv.furthest() < p2_inv.furthest()) {
             return result_t(std::move(p2_err), p2_inv.furthest());
         }
-        else {
-            // They got to the same distance, need to merge errors
-            // XXX(LPeter1997): Implement, for now we just return the first
-            return result_t(std::move(p1_err), p1_inv.furthest());
-        }
+        // They got to the same distance, need to merge errors
+        // XXX(LPeter1997): Implement, for now we just return the first
+        return result_t(std::move(p1_err), p1_inv.furthest());
     }
 };
 
@@ -1440,10 +1437,8 @@ public:
             // Succeed
             return result_t(std::move(p_succ), p_inv.furthest());
         }
-        else {
-            // Fail
-            return result_t(failure(), p_inv.furthest());
-        }
+        // Fail
+        return result_t(failure(), p_inv.furthest());
     }
 };
 
@@ -1475,9 +1470,8 @@ public:
             // Nothing to consume
             return result_t(failure(), 0U);
         }
-        else {
-            return result_t(success(r.current(), 1U), 1U);
-        }
+        // Consume an element
+        return result_t(success(r.current(), 1U), 1U);
     }
 };
 
@@ -1609,11 +1603,11 @@ public:
         );
 
         if (m_Predicate(args...)) {
+            // Predicate returned true, succeed
             return some(product_values(cppcmb_fwd(args)...));
         }
-        else {
-            return none();
-        }
+        // Predicate failed, fail
+        return none();
     }
 };
 
@@ -1748,10 +1742,8 @@ public:
             // We fail
             return result_t(failure(), inv.furthest());
         }
-        else {
-            // We succeed
-            return result_t(success(product<>(), 1), inv.furthest());
-        }
+        // We succeed
+        return result_t(success(product<>(), 1), inv.furthest());
     }
 };
 

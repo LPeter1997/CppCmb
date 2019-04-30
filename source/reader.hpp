@@ -61,7 +61,7 @@ public:
     constexpr reader() noexcept = default;
 
     constexpr reader(Src const& src, std::size_t idx, memo_context* t) noexcept
-        : m_Source(::std::addressof(src)), m_Cursor(0U), m_MemoCtx(t) {
+        : m_Source(::std::addressof(src)), m_MemoCtx(t) {
         seek(idx);
     }
 

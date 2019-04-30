@@ -102,12 +102,11 @@ private:
         if (act_inv.is_none()) {
             return result_t(failure(), inv.furthest());
         }
-        else {
-            return result_t(
-                success(std::move(act_inv).some().value(), succ.matched()),
-                inv.furthest()
-            );
-        }
+
+        return result_t(
+            success(std::move(act_inv).some().value(), succ.matched()),
+            inv.furthest()
+        );
     }
 
     // XXX(LPeter1997): Noexcept specifier

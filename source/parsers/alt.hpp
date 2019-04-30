@@ -95,14 +95,12 @@ public:
         if (p1_inv.furthest() > p2_inv.furthest()) {
             return result_t(std::move(p1_err), p1_inv.furthest());
         }
-        else if (p1_inv.furthest() < p2_inv.furthest()) {
+        if (p1_inv.furthest() < p2_inv.furthest()) {
             return result_t(std::move(p2_err), p2_inv.furthest());
         }
-        else {
-            // They got to the same distance, need to merge errors
-            // XXX(LPeter1997): Implement, for now we just return the first
-            return result_t(std::move(p1_err), p1_inv.furthest());
-        }
+        // They got to the same distance, need to merge errors
+        // XXX(LPeter1997): Implement, for now we just return the first
+        return result_t(std::move(p1_err), p1_inv.furthest());
     }
 };
 

@@ -67,10 +67,8 @@ public:
             // Succeed
             return result_t(std::move(p_succ), p_inv.furthest());
         }
-        else {
-            // Fail
-            return result_t(failure(), p_inv.furthest());
-        }
+        // Fail
+        return result_t(failure(), p_inv.furthest());
     }
 };
 
