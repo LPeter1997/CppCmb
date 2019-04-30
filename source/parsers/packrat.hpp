@@ -34,26 +34,19 @@ protected:
         return m_ID;
     }
 
-    // XXX(LPeter1997): This could be static (or removed)
-    // XXX(LPeter1997): Noexcept specifier
-    template <typename Src>
-    constexpr auto& context(reader<Src> const& r) const {
-        return r.context();
-    }
-
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src, typename TFwd>
     constexpr auto& put_memo(reader<Src> const& r,
         TFwd&& val, std::size_t furth) const {
 
-        auto& table = context(r).memo();
+        auto& table = r.context().memo();
         return table.put(original_id(), r, cppcmb_fwd(val), furth);
     }
 
     // XXX(LPeter1997): Noexcept specifier
     template <typename Src>
     [[nodiscard]] constexpr std::any* get_memo(reader<Src> const& r) const {
-        auto& table = context(r).memo();
+        auto& table = r.context().memo();
         return table.get(original_id(), r);
     }
 };
