@@ -7,9 +7,9 @@
  * Inclusion of all of the library headers for a single-include option.
  */
 
-#ifndef CPPCMB_HPP
-#define CPPCMB_HPP
+#ifndef CPPCMB_CPPCMB_HPP
+#define CPPCMB_CPPCMB_HPP
 
 
 
-#endif /* CPPCMB_HPP */
+#endif /* CPPCMB_CPPCMB_HPP */
