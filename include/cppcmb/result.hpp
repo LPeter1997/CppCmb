@@ -11,7 +11,10 @@
 #define CPPCMB_RESULT_HPP
 
 #include <iterator>
+#include <type_traits>
 #include <variant>
+#include <cppcmb/utils/fwd.hpp>
+#include <cppcmb/utils/requires.hpp>
 
 namespace cppcmb {
 
@@ -24,7 +27,17 @@ public:
     using ok_type = ok;
     using error_type = error;
 
+private:
+    using variant_type = std::variant<ok_type, error_type>;
+
 public:
+    template <typename TFwd,
+        CPPCMB_REQUIRES(!std::is_same_v<std::decay_t<TFwd>, result>)>
+    constexpr result(TFwd&& value)
+        noexcept(std::is_nothrow_constructible_v<variant_type, TFwd&&>)
+        : m_Result(CPPCMB_FWD(value)) {
+    }
+
     [[nodiscard]] constexpr bool is_ok() const noexcept {
         return std::holds_alternative<ok_type>(m_Result);
     }
@@ -34,7 +47,7 @@ public:
     }
 
 private:
-    std::variant<ok_type, error_type> m_Result;
+    variant_type m_Result;
 };
 
 } /* namespace cppcmb */
