@@ -10,6 +10,6 @@
 #ifndef CPPCMB_CPPCMB_HPP
 #define CPPCMB_CPPCMB_HPP
 
-
+#include <cppcmb/result.hpp>
 
 #endif /* CPPCMB_CPPCMB_HPP */
