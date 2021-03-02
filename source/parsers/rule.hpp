@@ -24,11 +24,6 @@ namespace detail {
 template <typename>
 inline /* constexpr */ auto rule_set = 0;
 
-template <typename, typename U>
-struct second {
-    using type = U;
-};
-
 } /* namespace detail */
 
 template <typename Val, typename Tag>
@@ -58,18 +53,15 @@ auto const name =              \
  * Used to define rules.
  * Generates the function that does the indirect-call.
  */
-#define cppcmb_def(name)                                            \
-template <typename Src>                                             \
-[[nodiscard]] constexpr auto                                        \
-cppcmb_parse_rule(decltype(name), ::cppcmb::reader<Src> const& r) { \
-    using tag_type = typename decltype(name)::tag_type;             \
-    auto const& p = ::cppcmb::detail::rule_set<                     \
-        typename ::cppcmb::detail::second<Src, tag_type>::type      \
-    >;                                                              \
-    return p.apply(r);                                              \
-}                                                                   \
-template <>                                                         \
-inline /* constexpr */ auto                                         \
+#define cppcmb_def(name)                                                   \
+template <typename Src, typename Lazy = typename decltype(name)::tag_type> \
+[[nodiscard]] constexpr auto                                               \
+cppcmb_parse_rule(decltype(name), ::cppcmb::reader<Src> const& r) {        \
+    auto const& p = ::cppcmb::detail::rule_set<Lazy>;                      \
+    return p.apply(r);                                                     \
+}                                                                          \
+template <>                                                                \
+inline /* constexpr */ auto                                                \
 ::cppcmb::detail::rule_set<typename decltype(name)::tag_type>
 
 } /* namespace cppcmb */
